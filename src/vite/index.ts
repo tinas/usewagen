@@ -1,6 +1,8 @@
 import type { Plugin } from 'vite-plus'
+
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, relative, resolve } from 'node:path'
+import { isBuiltinParserName } from '../parser/resolve'
 
 const VIRTUAL_ID = 'virtual:usewagen'
 const RESOLVED_VIRTUAL_ID = `\0${VIRTUAL_ID}`
@@ -30,7 +32,14 @@ function extractParserExports(filePath: string): string[] {
   const constRegex = /export\s+const\s+(parseAs\w+)/g
   let match: RegExpExecArray | null
   while ((match = constRegex.exec(content)) !== null) {
-    names.push(match[1])
+    const name = match[1]
+    if (isBuiltinParserName(name)) {
+      console.warn(
+        `[usewagen] Skipping "${name}" in ${filePath}: the name is reserved by a built-in parser.`,
+      )
+      continue
+    }
+    names.push(name)
   }
 
   return names
@@ -67,7 +76,7 @@ function generateDts(exports: ParsedExport[], dtsPath: string): string {
     'export {}',
     '',
     "declare module 'usewagen' {",
-    '  interface ParserRegistry {',
+    '  interface CustomParsers {',
   ]
 
   for (const { name, filePath } of exports) {
@@ -81,7 +90,7 @@ function generateDts(exports: ParsedExport[], dtsPath: string): string {
 }
 
 function generateVirtualModule(exports: ParsedExport[]): string {
-  const lines: string[] = ["import { registerParser } from 'usewagen'", '']
+  const lines: string[] = ["import { registerParser } from 'usewagen/registry'", '']
 
   const byFile = new Map<string, string[]>()
   for (const { name, filePath } of exports) {
@@ -103,7 +112,6 @@ function generateVirtualModule(exports: ParsedExport[]): string {
   return lines.join('\n')
 }
 
-/** Vite plugin that auto-discovers parsers and generates type augmentation. */
 export function usewagen(options: UsewagenPluginOptions = {}): Plugin {
   const { dirs: rawDirs = 'src/parsers', dts = 'usewagen.d.ts' } = options
 

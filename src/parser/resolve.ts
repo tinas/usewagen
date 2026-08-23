@@ -1,5 +1,6 @@
-import type { ParserLike } from '../types'
-import type { Parser } from './index'
+import type { ParserInput } from './types'
+import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
+
 import {
   parseAsBoolean,
   parseAsDate,
@@ -7,37 +8,62 @@ import {
   parseAsIndex,
   parseAsInteger,
   parseAsString,
-} from './index'
+} from './parsers'
+
+export type ResolvedParser<T> = {
+  parse: (raw: string) => T | null
+  serialize: (value: T) => string
+  defaultValue?: DefaultValue<T>
+}
+
+const builtins = new Map<string, Parser<any>>([
+  ['parseAsString', parseAsString],
+  ['parseAsInteger', parseAsInteger],
+  ['parseAsFloat', parseAsFloat],
+  ['parseAsIndex', parseAsIndex],
+  ['parseAsBoolean', parseAsBoolean],
+  ['parseAsDate', parseAsDate],
+])
 
 const registry = new Map<string, Parser<any>>()
 
-registry.set('parseAsString', parseAsString)
-registry.set('parseAsInteger', parseAsInteger)
-registry.set('parseAsFloat', parseAsFloat)
-registry.set('parseAsIndex', parseAsIndex)
-registry.set('parseAsBoolean', parseAsBoolean)
-registry.set('parseAsDate', parseAsDate)
+export function isBuiltinParserName(name: string): boolean {
+  return builtins.has(name)
+}
 
-/** Registers a parser instance into the global registry by name. */
 export function registerParser(name: string, parser: Parser<any>): void {
+  if (builtins.has(name)) {
+    console.warn(
+      `[usewagen] "${name}" is a built-in parser name and cannot be overridden — registration ignored.`,
+    )
+    return
+  }
   registry.set(name, parser)
 }
 
-/** Looks up a parser by name from the registry. */
 export function getParser(name: string): Parser<any> | undefined {
-  return registry.get(name)
+  return builtins.get(name) ?? registry.get(name)
 }
 
-/** Resolves a parser input (direct instance or name reference) into a usable parser. */
-export function resolveParser(input: ParserLike): Parser<any> {
-  if ('get' in input) {
-    return input
+function toResolvedParser<T>(parser: Parser<T>): ResolvedParser<T> {
+  const resolved: ResolvedParser<T> = {
+    parse: parser.parse,
+    serialize: parser.serialize,
   }
+  if ('defaultValue' in parser) {
+    resolved.defaultValue = (parser as ParserWithDefault<T>).defaultValue
+  }
+  return resolved
+}
 
-  const parser: Parser<any> = getParser(input.name) ?? parseAsString
+export function resolveParser(input: ParserInput = { name: 'parseAsString' }): ResolvedParser<any> {
+  if ('parse' in input) {
+    return toResolvedParser(input)
+  }
+  const parser = getParser(input.name) ?? parseAsString
+  const resolved = toResolvedParser(parser)
   if ('defaultValue' in input) {
-    return parser.default(input.defaultValue)
+    resolved.defaultValue = input.defaultValue
   }
-
-  return parser
+  return resolved
 }
