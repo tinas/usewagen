@@ -9,139 +9,162 @@ import {
   parseAsIndex,
   parseAsInteger,
   parseAsJson,
-  parseAsMap,
   parseAsNumberLiteral,
   parseAsString,
   parseAsStringEnum,
   parseAsStringLiteral,
-  resolveDefault,
-} from '../src'
+  unwrapDefault,
+} from '../src/parser/parsers'
 
-describe('resolveDefault', () => {
-  test('resolves a plain value', () => {
-    expect(resolveDefault(42)).toBe(42)
+describe('unwrapDefault', () => {
+  test('returns a plain value as-is', () => {
+    expect(unwrapDefault(42)).toBe(42)
   })
 
-  test('resolves a factory function', () => {
-    expect(resolveDefault(() => 'hello')).toBe('hello')
+  test('invokes a factory function', () => {
+    expect(unwrapDefault(() => 'hello')).toBe('hello')
   })
 })
 
 describe('defineParser', () => {
   test('creates a parser with parse and serialize', () => {
-    const parser = defineParser({ get: v => Number(v), set: v => String(v) })
+    const parser = defineParser<number>({
+      parse: v => Number(v),
+      serialize: v => String(v),
+    })
 
-    expect(parser.get('123')).toBe(123)
-    expect(parser.set(456)).toBe('456')
+    expect(parser.parse('123')).toBe(123)
+    expect(parser.serialize(456)).toBe('456')
   })
 
-  test('.default() creates a parser with defaultValue', () => {
-    const parser = parseAsString.default('fallback')
+  test('applies String() as the fallback serialize', () => {
+    const parser = defineParser<string>({ parse: v => v })
+
+    expect(parser.serialize('hi')).toBe('hi')
+  })
+
+  test('.withDefault() attaches a defaultValue', () => {
+    const parser = parseAsString.withDefault('fallback')
 
     expect(parser.defaultValue).toBe('fallback')
-    expect(parser.get('hi')).toBe('hi')
-    expect(parser.set('hi')).toBe('hi')
+    expect(parser.parse('hi')).toBe('hi')
+    expect(parser.serialize('hi')).toBe('hi')
+  })
+
+  test('.withDefault() returns a new parser without mutating the source', () => {
+    const withDefault = parseAsInteger.withDefault(1)
+
+    expect(withDefault).not.toBe(parseAsInteger)
+    expect('defaultValue' in parseAsInteger).toBe(false)
   })
 })
 
 describe('parseAsString', () => {
   test('parses any string as-is', () => {
-    expect(parseAsString.get('hello')).toBe('hello')
-    expect(parseAsString.get('')).toBe('')
+    expect(parseAsString.parse('hello')).toBe('hello')
+    expect(parseAsString.parse('')).toBe('')
   })
 
   test('serializes a string as-is', () => {
-    expect(parseAsString.set('world')).toBe('world')
+    expect(parseAsString.serialize('world')).toBe('world')
   })
 })
 
 describe('parseAsInteger', () => {
   test('parses valid integers', () => {
-    expect(parseAsInteger.get('42')).toBe(42)
-    expect(parseAsInteger.get('-7')).toBe(-7)
+    expect(parseAsInteger.parse('42')).toBe(42)
+    expect(parseAsInteger.parse('-7')).toBe(-7)
   })
 
   test('returns null for invalid input', () => {
-    expect(parseAsInteger.get('abc')).toBeNull()
-    expect(parseAsInteger.get('')).toBeNull()
+    expect(parseAsInteger.parse('abc')).toBeNull()
+    expect(parseAsInteger.parse('')).toBeNull()
   })
 
   test('serializes by truncating', () => {
-    expect(parseAsInteger.set(3.9)).toBe('3')
+    expect(parseAsInteger.serialize(3.9)).toBe('3')
   })
 })
 
 describe('parseAsFloat', () => {
   test('parses valid floats', () => {
-    expect(parseAsFloat.get('3.14')).toBeCloseTo(3.14)
+    expect(parseAsFloat.parse('3.14')).toBeCloseTo(3.14)
   })
 
   test('returns null for invalid input', () => {
-    expect(parseAsFloat.get('abc')).toBeNull()
+    expect(parseAsFloat.parse('abc')).toBeNull()
   })
 
   test('serializes floats', () => {
-    expect(parseAsFloat.set(2.5)).toBe('2.5')
+    expect(parseAsFloat.serialize(2.5)).toBe('2.5')
   })
 })
 
 describe('parseAsIndex', () => {
   test('parses 1-based index to 0-based', () => {
-    expect(parseAsIndex.get('1')).toBe(0)
-    expect(parseAsIndex.get('5')).toBe(4)
+    expect(parseAsIndex.parse('1')).toBe(0)
+    expect(parseAsIndex.parse('5')).toBe(4)
   })
 
   test('serializes 0-based to 1-based', () => {
-    expect(parseAsIndex.set(0)).toBe('1')
-    expect(parseAsIndex.set(4)).toBe('5')
+    expect(parseAsIndex.serialize(0)).toBe('1')
+    expect(parseAsIndex.serialize(4)).toBe('5')
   })
 
   test('returns null for invalid input', () => {
-    expect(parseAsIndex.get('abc')).toBeNull()
+    expect(parseAsIndex.parse('abc')).toBeNull()
   })
 })
 
 describe('parseAsBoolean', () => {
   test('parses true/false strings', () => {
-    expect(parseAsBoolean.get('true')).toBe(true)
-    expect(parseAsBoolean.get('false')).toBe(false)
+    expect(parseAsBoolean.parse('true')).toBe(true)
+    expect(parseAsBoolean.parse('false')).toBe(false)
   })
 
   test('returns null for invalid input', () => {
-    expect(parseAsBoolean.get('yes')).toBeNull()
-    expect(parseAsBoolean.get('')).toBeNull()
+    expect(parseAsBoolean.parse('yes')).toBeNull()
+    expect(parseAsBoolean.parse('')).toBeNull()
   })
 
   test('serializes booleans', () => {
-    expect(parseAsBoolean.set(true)).toBe('true')
-    expect(parseAsBoolean.set(false)).toBe('false')
+    expect(parseAsBoolean.serialize(true)).toBe('true')
+    expect(parseAsBoolean.serialize(false)).toBe('false')
   })
 })
 
 describe('parseAsStringLiteral', () => {
-  const parser = parseAsStringLiteral(['a', 'b', 'c'] as const)
+  const parser = parseAsStringLiteral(['a', 'b', 'c'])
 
   test('parses valid values', () => {
-    expect(parser.get('a')).toBe('a')
-    expect(parser.get('b')).toBe('b')
+    expect(parser.parse('a')).toBe('a')
+    expect(parser.parse('b')).toBe('b')
   })
 
   test('returns null for invalid values', () => {
-    expect(parser.get('d')).toBeNull()
+    expect(parser.parse('d')).toBeNull()
+  })
+
+  test('serializes as-is', () => {
+    expect(parser.serialize('a')).toBe('a')
   })
 })
 
 describe('parseAsNumberLiteral', () => {
-  const parser = parseAsNumberLiteral([1, 2, 3] as const)
+  const parser = parseAsNumberLiteral([1, 2, 3])
 
   test('parses valid number values', () => {
-    expect(parser.get('1')).toBe(1)
-    expect(parser.get('3')).toBe(3)
+    expect(parser.parse('1')).toBe(1)
+    expect(parser.parse('3')).toBe(3)
   })
 
   test('returns null for invalid values', () => {
-    expect(parser.get('5')).toBeNull()
-    expect(parser.get('abc')).toBeNull()
+    expect(parser.parse('5')).toBeNull()
+    expect(parser.parse('abc')).toBeNull()
+  })
+
+  test('serializes numbers to strings', () => {
+    expect(parser.serialize(2)).toBe('2')
   })
 })
 
@@ -153,56 +176,68 @@ describe('parseAsStringEnum', () => {
   const parser = parseAsStringEnum(Object.values(Color))
 
   test('parses valid enum values', () => {
-    expect(parser.get('red')).toBe('red')
+    expect(parser.parse('red')).toBe('red')
   })
 
   test('returns null for invalid values', () => {
-    expect(parser.get('green')).toBeNull()
+    expect(parser.parse('green')).toBeNull()
+  })
+
+  test('serializes as-is', () => {
+    expect(parser.serialize(Color.Blue)).toBe('blue')
   })
 })
 
 describe('parseAsDate', () => {
   test('parses date strings (YYYY-MM-DD)', () => {
-    const d = parseAsDate.get('2024-01-15')
+    const d = parseAsDate.parse('2024-01-15')
 
     expect(d).toBeInstanceOf(Date)
     expect(d!.toISOString().startsWith('2024-01-15')).toBe(true)
   })
 
   test('parses ISO datetime strings', () => {
-    const d = parseAsDate.get('2024-01-15T10:30:00.000Z')
+    const d = parseAsDate.parse('2024-01-15T10:30:00.000Z')
 
     expect(d).toBeInstanceOf(Date)
   })
 
   test('returns null for invalid dates', () => {
-    expect(parseAsDate.get('not-a-date')).toBeNull()
+    expect(parseAsDate.parse('not-a-date')).toBeNull()
   })
 
   test('serializes to YYYY-MM-DD', () => {
     const d = new Date('2024-06-01T00:00:00.000Z')
 
-    expect(parseAsDate.set(d)).toBe('2024-06-01')
+    expect(parseAsDate.serialize(d)).toBe('2024-06-01')
   })
 
   test('.iso() parses and serializes full ISO strings', () => {
     const isoParser = parseAsDate.iso()
-    const d = isoParser.get('2024-01-15T10:30:00.000Z')
+    const d = isoParser.parse('2024-01-15T10:30:00.000Z')
 
     expect(d).toBeInstanceOf(Date)
-    expect(isoParser.set(d!)).toBe('2024-01-15T10:30:00.000Z')
+    expect(isoParser.serialize(d!)).toBe('2024-01-15T10:30:00.000Z')
+  })
+
+  test('.iso() returns null for invalid input', () => {
+    expect(parseAsDate.iso().parse('not-a-date')).toBeNull()
   })
 
   test('.timestamp() parses and serializes timestamps', () => {
     const tsParser = parseAsDate.timestamp()
     const now = new Date()
-    const serialized = tsParser.set(now)
+    const serialized = tsParser.serialize(now)
 
     expect(serialized).toBe(now.getTime().toString())
 
-    const parsed = tsParser.get(serialized)
+    const parsed = tsParser.parse(serialized)
 
     expect(parsed!.getTime()).toBe(now.getTime())
+  })
+
+  test('.timestamp() returns null for non-numeric input', () => {
+    expect(parseAsDate.timestamp().parse('not-a-number')).toBeNull()
   })
 })
 
@@ -210,26 +245,33 @@ describe('parseAsArrayOf', () => {
   const parser = parseAsArrayOf(parseAsInteger)
 
   test('parses comma-separated integers', () => {
-    expect(parser.get('1,2,3')).toEqual([1, 2, 3])
+    expect(parser.parse('1,2,3')).toEqual([1, 2, 3])
   })
 
   test('parses empty string as empty array', () => {
-    expect(parser.get('')).toEqual([])
+    expect(parser.parse('')).toEqual([])
   })
 
-  test('returns null if any item is invalid', () => {
-    expect(parser.get('1,abc,3')).toBeNull()
+  test('drops items that fail to parse', () => {
+    expect(parser.parse('1,abc,3')).toEqual([1, 3])
   })
 
   test('serializes arrays', () => {
-    expect(parser.set([1, 2, 3])).toBe('1,2,3')
+    expect(parser.serialize([1, 2, 3])).toBe('1,2,3')
   })
 
-  test('supports custom separator', () => {
+  test('supports a custom separator', () => {
     const p = parseAsArrayOf(parseAsString, '|')
 
-    expect(p.get('a|b|c')).toEqual(['a', 'b', 'c'])
-    expect(p.set(['x', 'y'])).toBe('x|y')
+    expect(p.parse('a|b|c')).toEqual(['a', 'b', 'c'])
+    expect(p.serialize(['x', 'y'])).toBe('x|y')
+  })
+
+  test('escapes separators embedded in items', () => {
+    const p = parseAsArrayOf(parseAsString, ',')
+
+    expect(p.serialize(['a,b', 'c'])).toBe('a%2Cb,c')
+    expect(p.parse('a%2Cb,c')).toEqual(['a,b', 'c'])
   })
 })
 
@@ -237,49 +279,14 @@ describe('parseAsJson', () => {
   const parser = parseAsJson<{ name: string }>()
 
   test('parses valid JSON', () => {
-    expect(parser.get('{"name":"test"}')).toEqual({ name: 'test' })
+    expect(parser.parse('{"name":"test"}')).toEqual({ name: 'test' })
   })
 
   test('returns null for invalid JSON', () => {
-    expect(parser.get('not json')).toBeNull()
+    expect(parser.parse('not json')).toBeNull()
   })
 
   test('serializes to JSON string', () => {
-    expect(parser.set({ name: 'test' })).toBe('{"name":"test"}')
-  })
-})
-
-describe('parseAsMap', () => {
-  const parser = parseAsMap(parseAsString, parseAsInteger)
-
-  test('parses map from string', () => {
-    const result = parser.get('a:1;b:2')
-
-    expect(result).toBeInstanceOf(Map)
-    expect(result!.get('a')).toBe(1)
-    expect(result!.get('b')).toBe(2)
-  })
-
-  test('parses empty string as empty map', () => {
-    const result = parser.get('')
-
-    expect(result!.size).toBe(0)
-  })
-
-  test('returns null for invalid entries', () => {
-    expect(parser.get('invalid')).toBeNull()
-  })
-
-  test('returns null for invalid values', () => {
-    expect(parser.get('a:abc')).toBeNull()
-  })
-
-  test('serializes map to string', () => {
-    const map = new Map([
-      ['x', 10],
-      ['y', 20],
-    ])
-
-    expect(parser.set(map)).toBe('x:10;y:20')
+    expect(parser.serialize({ name: 'test' })).toBe('{"name":"test"}')
   })
 })

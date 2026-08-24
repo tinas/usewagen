@@ -21,13 +21,40 @@ function cleanup() {
 describe('usewagen plugin', () => {
   afterEach(() => cleanup())
 
-  test('returns a plugin with correct name', () => {
+  test('returns a plugin with the correct name', () => {
     const plugin = usewagen()
 
     expect(plugin.name).toBe('usewagen')
   })
 
-  test('resolves virtual module id', () => {
+  test('skips exports that collide with a built-in parser name', () => {
+    createFixture(
+      'shadow.ts',
+      `
+import { defineParser } from 'usewagen'
+
+export const parseAsString = defineParser({ parse: v => v, serialize: String })
+export const parseAsMoney = defineParser({ parse: v => Number(v), serialize: String })
+`,
+    )
+
+    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
+    const configResolved = plugin.configResolved as (config: { root: string }) => void
+    configResolved({ root: import.meta.dirname })
+
+    const dtsContent = readFileSync(dtsPath, 'utf-8')
+
+    expect(dtsContent).toContain('parseAsMoney')
+    expect(dtsContent).not.toContain('parseAsString')
+
+    const load = plugin.load as (id: string) => string | undefined
+    const virtualModule = load('\0virtual:usewagen')!
+
+    expect(virtualModule).toContain("registerParser('parseAsMoney'")
+    expect(virtualModule).not.toContain("registerParser('parseAsString'")
+  })
+
+  test('resolves the virtual module id', () => {
     const plugin = usewagen()
     const resolveId = plugin.resolveId as (id: string) => string | undefined
 
@@ -35,15 +62,15 @@ describe('usewagen plugin', () => {
     expect(resolveId('other-module')).toBeUndefined()
   })
 
-  test('generates correct dts structure', () => {
+  test('generates the expected dts structure', () => {
     createFixture(
       'pagination.ts',
       `
 import { defineParser, parseAsStringLiteral } from 'usewagen'
 
 export const parseAsPage = defineParser({
-  get: v => Number(v),
-  set: v => String(v),
+  parse: v => Number(v),
+  serialize: v => String(v),
 })
 
 export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
@@ -61,7 +88,7 @@ export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
       export {}
 
       declare module 'usewagen' {
-        interface ParserRegistry {
+        interface CustomParsers {
           parseAsPage: typeof import('./parsers/pagination')['parseAsPage']
           parseAsSort: typeof import('./parsers/pagination')['parseAsSort']
         }
@@ -70,15 +97,15 @@ export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
     `)
   })
 
-  test('generates virtual module with registerParser calls', () => {
+  test('generates a virtual module with registerParser calls', () => {
     createFixture(
       'pagination.ts',
       `
 import { defineParser, parseAsStringLiteral } from 'usewagen'
 
 export const parseAsPage = defineParser({
-  get: v => Number(v),
-  set: v => String(v),
+  parse: v => Number(v),
+  serialize: v => String(v),
 })
 
 export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
@@ -93,7 +120,7 @@ export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
     const content = load('\0virtual:usewagen')!.replaceAll(fixtureDir, '<parsers>')
 
     expect(content).toMatchInlineSnapshot(`
-      "import { registerParser } from 'usewagen'
+      "import { registerParser } from 'usewagen/registry'
 
       import { parseAsPage, parseAsSort } from '<parsers>/pagination.ts'
 
@@ -110,12 +137,12 @@ export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
 import { defineParser } from 'usewagen'
 
 export function parseAsCustom(values: string[]) {
-  return defineParser({ get: v => v, set: v => v })
+  return defineParser({ parse: v => v, serialize: v => v })
 }
 
 export const parseAsValid = defineParser({
-  get: v => v,
-  set: v => v,
+  parse: v => v,
+  serialize: v => v,
 })
 `,
     )
@@ -141,7 +168,7 @@ export const parseAsIgnored = {}
     createFixture(
       'real.ts',
       `
-export const parseAsReal = defineParser({ get: v => v, set: v => v })
+export const parseAsReal = defineParser({ parse: v => v, serialize: v => v })
 `,
     )
 
@@ -156,7 +183,7 @@ export const parseAsReal = defineParser({ get: v => v, set: v => v })
     expect(content).not.toContain('parseAsIgnored')
   })
 
-  test('handles empty directory', () => {
+  test('handles an empty directory', () => {
     if (!existsSync(fixtureDir)) mkdirSync(fixtureDir, { recursive: true })
 
     const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
@@ -166,11 +193,11 @@ export const parseAsReal = defineParser({ get: v => v, set: v => v })
     const load = plugin.load as (id: string) => string | undefined
     const content = load('\0virtual:usewagen')!
 
-    expect(content).toContain("import { registerParser } from 'usewagen'")
+    expect(content).toContain("import { registerParser } from 'usewagen/registry'")
     expect(content).not.toContain('parseAs')
   })
 
-  test('handles non-existent directory', () => {
+  test('handles a non-existent directory', () => {
     const plugin = usewagen({ dirs: '/nonexistent/path', dts: false })
     const configResolved = plugin.configResolved as (config: { root: string }) => void
     configResolved({ root: import.meta.dirname })
@@ -186,7 +213,7 @@ export const parseAsReal = defineParser({ get: v => v, set: v => v })
     mkdirSync(nestedDir, { recursive: true })
     writeFileSync(
       resolve(nestedDir, 'deep.ts'),
-      `export const parseAsDeep = defineParser({ get: v => v, set: v => v })`,
+      `export const parseAsDeep = defineParser({ parse: v => v, serialize: v => v })`,
       'utf-8',
     )
 
@@ -203,7 +230,7 @@ export const parseAsReal = defineParser({ get: v => v, set: v => v })
   test('disables dts generation when dts is false', () => {
     createFixture(
       'noop.ts',
-      `export const parseAsNoop = defineParser({ get: v => v, set: v => v })`,
+      `export const parseAsNoop = defineParser({ parse: v => v, serialize: v => v })`,
     )
 
     const plugin = usewagen({ dirs: fixtureDir, dts: false })

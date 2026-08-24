@@ -18,6 +18,8 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./registry": "./dist/registry.mjs",
+    "./router": "./dist/router/index.mjs",
     "./vite": "./dist/vite/index.mjs",
     "./package.json": "./package.json"
   },
@@ -38,6 +40,22 @@
     "bumpp": "^11.1.0",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "vite": "^7.3.0 || ^8.0.0",
+    "vue": "^3.5.0 || ^4.0.0",
+    "vue-router": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "vue-router": {
+      "optional": true
+    }
   },
   "devEngines": {
     "packageManager": {
