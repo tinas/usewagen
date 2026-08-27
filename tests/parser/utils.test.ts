@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test'
 
-import { resolveParser } from '../src/parser/resolve'
-import { parseValue, serializeValue, toResolvedOptions } from '../src/router/utils'
+import { resolveParser } from '../../src/parser/resolve'
+import { parseValue, serializeValue } from '../../src/parser/utils'
 
 describe('parseValue', () => {
   const intWithDefault = resolveParser({ name: 'parseAsInteger', defaultValue: 1 })
@@ -69,46 +69,5 @@ describe('serializeValue', () => {
 
   test('clearOnDefault has no effect when the parser has no default', () => {
     expect(serializeValue(intNoDefault, true, 5)).toBe('5')
-  })
-})
-
-describe('toResolvedOptions', () => {
-  test('applies defaults for optional fields', () => {
-    const resolved = toResolvedOptions({ key: 'q', parser: { name: 'parseAsString' } })
-
-    expect(resolved.key).toBe('q')
-    expect(resolved.urlKey).toBe('q')
-    expect(resolved.source).toBe('query')
-    expect(resolved.history).toBe('replace')
-    expect(resolved.clearOnDefault).toBe(true)
-  })
-
-  test('preserves explicit values', () => {
-    const resolved = toResolvedOptions({
-      key: 'search',
-      parser: { name: 'parseAsString' },
-      urlKey: 'q',
-      source: 'params',
-      history: 'push',
-      clearOnDefault: false,
-    })
-
-    expect(resolved.urlKey).toBe('q')
-    expect(resolved.source).toBe('params')
-    expect(resolved.history).toBe('push')
-    expect(resolved.clearOnDefault).toBe(false)
-  })
-
-  test('urlKey defaults to key', () => {
-    const resolved = toResolvedOptions({ key: 'page', parser: { name: 'parseAsInteger' } })
-
-    expect(resolved.urlKey).toBe('page')
-  })
-
-  test('parser defaults to parseAsString when omitted', () => {
-    const resolved = toResolvedOptions({ key: 'q' })
-
-    expect(resolved.parser.parse('hello')).toBe('hello')
-    expect('defaultValue' in resolved.parser).toBe(false)
   })
 })

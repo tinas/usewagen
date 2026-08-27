@@ -1,3 +1,5 @@
+import { ErrorCodes, getMessage } from '../messages'
+
 export type ParserOptions<T> = {
   parse: (raw: string) => T | null
   serialize?: (value: T) => string
@@ -19,7 +21,7 @@ export function tryParse<I, R>(fn: (input: I) => R, input: I): R | null {
   try {
     return fn(input)
   } catch (error) {
-    console.warn(`[usewagen] Failed to parse "${String(input)}":`, error)
+    console.warn(getMessage(ErrorCodes.PARSE_FAILED), input, error)
     return null
   }
 }

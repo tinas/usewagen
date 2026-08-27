@@ -14,7 +14,7 @@ import {
   parseAsStringEnum,
   parseAsStringLiteral,
   unwrapDefault,
-} from '../src/parser/parsers'
+} from '../../src/parser/parsers'
 
 describe('unwrapDefault', () => {
   test('returns a plain value as-is', () => {

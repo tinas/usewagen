@@ -1,39 +1,15 @@
-import type { App } from 'vue'
-import type { Router } from 'vue-router'
+import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
 
-import { beforeEach, describe, expect, test } from 'vite-plus/test'
-import { createApp, nextTick } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineParser } from '../../src/parser/parsers'
+import { useRouteHash } from '../../src/router/use-route-hash'
+import { flush, setupRouter } from '../__helpers__/router'
 
-import { useRouteHash } from '../src/router/use-route-hash'
-import { defineParser } from '../src/parser/parsers'
-
-let app: App
-let router: Router
-
-beforeEach(async () => {
-  router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/', name: 'root', component: { template: '<div />' } }],
-  })
-  app = createApp({ render: () => null })
-  app.use(router)
-  await router.push('/')
-  await router.isReady()
-})
-
-function run<T>(fn: () => T): T {
-  return app.runWithContext(fn) as T
-}
-
-async function flush() {
-  await new Promise(resolve => setTimeout(resolve, 0))
-  await nextTick()
-}
+const ctx = setupRouter()
+const { run } = ctx
 
 describe('useRouteHash', () => {
   test('reads the hash verbatim including the # prefix', async () => {
-    await router.push('/#section')
+    await ctx.router.push('/#section')
 
     const hash = run(() => useRouteHash())
 
@@ -59,7 +35,7 @@ describe('useRouteHash', () => {
     hash.value = '#about'
     await flush()
 
-    expect(router.currentRoute.value.hash).toBe('#about')
+    expect(ctx.router.currentRoute.value.hash).toBe('#about')
   })
 
   test('round-trips a value written with a # prefix', async () => {
@@ -71,7 +47,7 @@ describe('useRouteHash', () => {
   })
 
   test('null clears the hash and falls back to the default', async () => {
-    await router.push('/#existing')
+    await ctx.router.push('/#existing')
 
     const hash = run(() =>
       useRouteHash({ parser: { name: 'parseAsString', defaultValue: '#home' } }),
@@ -79,7 +55,7 @@ describe('useRouteHash', () => {
     hash.value = null
     await flush()
 
-    expect(router.currentRoute.value.hash).toBe('')
+    expect(ctx.router.currentRoute.value.hash).toBe('')
     expect(hash.value).toBe('#home')
   })
 
@@ -90,7 +66,7 @@ describe('useRouteHash', () => {
     hash.value = '#home'
     await flush()
 
-    expect(router.currentRoute.value.hash).toBe('')
+    expect(ctx.router.currentRoute.value.hash).toBe('')
   })
 
   test('clearOnDefault=false keeps a value equal to the default', async () => {
@@ -103,7 +79,7 @@ describe('useRouteHash', () => {
     hash.value = '#home'
     await flush()
 
-    expect(router.currentRoute.value.hash).toBe('#home')
+    expect(ctx.router.currentRoute.value.hash).toBe('#home')
   })
 
   test('supports a custom parser that owns the # prefix', async () => {
@@ -115,26 +91,39 @@ describe('useRouteHash', () => {
       serialize: v => `#${v}`,
     })
 
-    await router.push('/#42')
+    await ctx.router.push('/#42')
 
     const hash = run(() => useRouteHash({ parser: parseAsHashInteger }))
     expect(hash.value).toBe(42)
 
     hash.value = 7
     await flush()
-    expect(router.currentRoute.value.hash).toBe('#7')
+    expect(ctx.router.currentRoute.value.hash).toBe('#7')
+  })
+
+  test('writing the hash already in the URL does not navigate', async () => {
+    await ctx.router.push('/#section')
+    const hash = run(() => useRouteHash({ history: 'push' }))
+
+    hash.value = '#section'
+    await flush()
+
+    ctx.router.back()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.fullPath).toBe('/')
   })
 
   test('history:replace does not add a history entry', async () => {
     const hash = run(() => useRouteHash())
     hash.value = '#a'
     await flush()
-    const after = router.currentRoute.value.fullPath
+    const after = ctx.router.currentRoute.value.fullPath
 
-    router.back()
+    ctx.router.back()
     await flush()
 
-    expect(router.currentRoute.value.fullPath).toBe(after)
+    expect(ctx.router.currentRoute.value.fullPath).toBe(after)
   })
 
   test('history:push adds a history entry', async () => {
@@ -142,20 +131,45 @@ describe('useRouteHash', () => {
     hash.value = '#a'
     await flush()
 
-    router.back()
+    ctx.router.back()
     await flush()
 
-    expect(router.currentRoute.value.hash).toBe('')
+    expect(ctx.router.currentRoute.value.hash).toBe('')
   })
 
   test('preserves query and params on navigation', async () => {
-    await router.push('/?page=2')
+    await ctx.router.push('/?page=2')
     const hash = run(() => useRouteHash())
 
     hash.value = '#section'
     await flush()
 
-    expect(router.currentRoute.value.query.page).toBe('2')
-    expect(router.currentRoute.value.hash).toBe('#section')
+    expect(ctx.router.currentRoute.value.query.page).toBe('2')
+    expect(ctx.router.currentRoute.value.hash).toBe('#section')
+  })
+})
+
+describe('useRouteHash type inference', () => {
+  test('falls back to the default parser when no options are given', () => {
+    const hash = run(() => useRouteHash())
+
+    expectTypeOf(hash.value).toEqualTypeOf<string | null>()
+  })
+
+  test('falls back to the default parser when only other options are given', () => {
+    const hash = run(() => useRouteHash({ history: 'push' }))
+
+    expectTypeOf(hash.value).toEqualTypeOf<string | null>()
+  })
+})
+
+describe('useRouteHash option typing', () => {
+  test('rejects a misspelled option', () => {
+    function reject() {
+      // @ts-expect-error unknown option
+      useRouteHash({ historyy: 'push' })
+    }
+
+    expect(typeof reject).toBe('function')
   })
 })
