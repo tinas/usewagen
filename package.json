@@ -20,6 +20,7 @@
     ".": "./dist/index.mjs",
     "./registry": "./dist/registry.mjs",
     "./router": "./dist/router/index.mjs",
+    "./storage": "./dist/storage/index.mjs",
     "./vite": "./dist/vite/index.mjs",
     "./package.json": "./package.json"
   },
@@ -48,9 +49,6 @@
   },
   "peerDependenciesMeta": {
     "vite": {
-      "optional": true
-    },
-    "vue": {
       "optional": true
     },
     "vue-router": {
