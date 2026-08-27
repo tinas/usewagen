@@ -1,6 +1,7 @@
 import type { ParserInput } from './types'
 import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
 
+import { ErrorCodes, getMessage } from '../messages'
 import {
   parseAsBoolean,
   parseAsDate,
@@ -33,9 +34,7 @@ export function isBuiltinParserName(name: string): boolean {
 
 export function registerParser(name: string, parser: Parser<any>): void {
   if (builtins.has(name)) {
-    console.warn(
-      `[usewagen] "${name}" is a built-in parser name and cannot be overridden — registration ignored.`,
-    )
+    console.warn(getMessage(ErrorCodes.BUILTIN_PARSER_OVERRIDE), name)
     return
   }
   registry.set(name, parser)

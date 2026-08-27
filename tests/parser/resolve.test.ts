@@ -1,8 +1,9 @@
 import { describe, expect, test, vi } from 'vite-plus/test'
 
-import { getParser, isBuiltinParserName, registerParser } from '../src/registry'
-import { defineParser, parseAsFloat, parseAsInteger, parseAsString } from '../src/parser/parsers'
-import { resolveParser } from '../src/parser/resolve'
+import { getParser, isBuiltinParserName, registerParser } from '../../src/registry'
+import { defineParser, parseAsFloat, parseAsInteger, parseAsString } from '../../src/parser/parsers'
+import { resolveParser } from '../../src/parser/resolve'
+import { ErrorCodes, getMessage } from '../../src/messages'
 
 describe('isBuiltinParserName', () => {
   test('is true for every built-in name', () => {
@@ -96,7 +97,10 @@ describe('registerParser', () => {
 
     expect(getParser('parseAsString')).toBe(parseAsString)
     expect(warn).toHaveBeenCalledOnce()
-    expect(warn.mock.calls[0][0]).toContain('parseAsString')
+    expect(warn).toHaveBeenCalledWith(
+      getMessage(ErrorCodes.BUILTIN_PARSER_OVERRIDE),
+      'parseAsString',
+    )
 
     warn.mockRestore()
   })

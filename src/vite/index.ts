@@ -3,6 +3,7 @@ import type { Plugin } from 'vite-plus'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { isBuiltinParserName } from '../parser/resolve'
+import { ErrorCodes, getMessage } from '../messages'
 
 const VIRTUAL_ID = 'virtual:usewagen'
 const RESOLVED_VIRTUAL_ID = `\0${VIRTUAL_ID}`
@@ -34,9 +35,7 @@ function extractParserExports(filePath: string): string[] {
   while ((match = constRegex.exec(content)) !== null) {
     const name = match[1]
     if (isBuiltinParserName(name)) {
-      console.warn(
-        `[usewagen] Skipping "${name}" in ${filePath}: the name is reserved by a built-in parser.`,
-      )
+      console.warn(getMessage(ErrorCodes.RESERVED_PARSER_NAME), name, filePath)
       continue
     }
     names.push(name)

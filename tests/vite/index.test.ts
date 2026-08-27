@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'vite-plus/test'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { usewagen } from '../src/vite'
+import { usewagen } from '../../src/vite'
 
 const fixtureDir = resolve(import.meta.dirname, '__fixtures__/parsers')
 const dtsPath = resolve(import.meta.dirname, '__fixtures__/usewagen.d.ts')
