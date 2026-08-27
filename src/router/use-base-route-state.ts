@@ -4,7 +4,7 @@ import type { HistoryMode, ResolvedRouteStateOptions, RouteStateSource } from '.
 
 import { customRef, nextTick, toValue } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { parseValue, serializeValue } from './utils'
+import { parseValue, serializeValue } from '../parser/utils'
 
 export interface RouteChange {
   urlKey: string
@@ -16,13 +16,23 @@ export function useBaseRouteState() {
   const route = useRoute()
   const router = useRouter()
 
+  function hasChanged(change: RouteChange): boolean {
+    const current =
+      change.source === 'params' ? route.params[change.urlKey] : route.query[change.urlKey]
+
+    if (Array.isArray(current)) return true
+    if (change.serialized === null) return current !== undefined
+    return current !== change.serialized
+  }
+
   function navigate(changes: RouteChange[], history: HistoryMode) {
-    if (changes.length === 0) return
+    const changed = changes.filter(hasChanged)
+    if (changed.length === 0) return
 
     const params: RouteParamsRaw = { ...route.params }
     const query: LocationQueryRaw = { ...route.query }
 
-    for (const change of changes) {
+    for (const change of changed) {
       const target = change.source === 'params' ? params : query
       target[change.urlKey] = change.serialized === null ? undefined : change.serialized
     }

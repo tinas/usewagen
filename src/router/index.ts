@@ -1,7 +1,5 @@
 export type {
   HistoryMode,
-  InferRouteStateInput,
-  InferRouteStateValue,
   ResolvedRouteStateOptions,
   RouteStateOptions,
   RouteStateSource,

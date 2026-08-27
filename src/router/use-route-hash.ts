@@ -1,22 +1,20 @@
 import type { MaybeRefOrGetter, Ref } from 'vue'
-import type { ParserInput } from '../parser/types'
+import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
 import type { ResolvedParser } from '../parser/resolve'
-import type { HistoryMode, InferRouteStateInput, InferRouteStateValue } from './types'
+import type { HistoryMode } from './types'
 
 import { computed, customRef, nextTick, toValue } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { resolveParser } from '../parser/resolve'
-import { parseValue, serializeValue } from './utils'
+import { parseValue, serializeValue } from '../parser/utils'
 
-export interface RouteHashOptions<P extends ParserInput = ParserInput> {
-  parser?: P
+export interface RouteHashOptions {
+  parser?: ParserInput
   history?: HistoryMode
   clearOnDefault?: boolean
 }
 
-export type UseRouteHashOptions<P extends ParserInput = ParserInput> = MaybeRefOrGetter<
-  RouteHashOptions<P>
->
+export type UseRouteHashOptions = MaybeRefOrGetter<RouteHashOptions>
 
 interface ResolvedRouteHashOptions {
   parser: ResolvedParser<any>
@@ -32,9 +30,9 @@ function toResolvedHashOptions(input: RouteHashOptions): ResolvedRouteHashOption
   }
 }
 
-export function useRouteHash<P extends ParserInput>(
-  options?: UseRouteHashOptions<P>,
-): Ref<InferRouteStateValue<P>, InferRouteStateInput<P>>
+export function useRouteHash<P extends ParserInput | undefined = undefined>(
+  options?: MaybeRefOrGetter<Omit<RouteHashOptions, 'parser'> & { parser?: P }>,
+): Ref<InferInputValue<P>, InferInputWritable<P>>
 
 export function useRouteHash(options: UseRouteHashOptions = {}) {
   const route = useRoute()
@@ -54,6 +52,9 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
       const { parser, history, clearOnDefault } = resolvedOptions.value
       const serialized = serializeValue(parser, clearOnDefault, next)
       void nextTick(() => {
+        const current = route.hash === '' ? null : route.hash
+        if (current === serialized) return
+
         void router[history]({
           query: route.query,
           params: route.params,

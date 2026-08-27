@@ -1,23 +1,16 @@
 import type { MaybeRefOrGetter, Ref } from 'vue'
-import type { ParserInput } from '../parser/types'
-import type {
-  InferRouteStateInput,
-  InferRouteStateValue,
-  ResolvedRouteStateOptions,
-  RouteStateOptions,
-} from './types'
+import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
+import type { ResolvedRouteStateOptions, RouteStateOptions } from './types'
 
 import { computed, toValue } from 'vue'
 import { useBaseRouteState } from './use-base-route-state'
 import { toResolvedOptions } from './utils'
 
-export type UseRouteStateOptions<P extends ParserInput = ParserInput> = MaybeRefOrGetter<
-  RouteStateOptions<P>
->
+export type UseRouteStateOptions = MaybeRefOrGetter<RouteStateOptions>
 
-export function useRouteState<P extends ParserInput>(
-  options: UseRouteStateOptions<P>,
-): Ref<InferRouteStateValue<P>, InferRouteStateInput<P>>
+export function useRouteState<P extends ParserInput | undefined = undefined>(
+  options: MaybeRefOrGetter<Omit<RouteStateOptions, 'parser'> & { parser?: P }>,
+): Ref<InferInputValue<P>, InferInputWritable<P>>
 
 export function useRouteState(options: UseRouteStateOptions) {
   const { createRouteStateRef } = useBaseRouteState()

@@ -1,44 +1,41 @@
 import type { Ref } from 'vue'
-import type {
-  HistoryMode,
-  InferRouteStateInput,
-  InferRouteStateValue,
-  RouteStateOptions,
-} from './types'
+import type { InferInputValue, InferInputWritable } from '../parser/types'
+import type { HistoryMode, RouteStateOptions } from './types'
 import type { RouteChange } from './use-base-route-state'
 
 import { nextTick } from 'vue'
 import { unwrapDefault } from '../parser'
+import { serializeValue } from '../parser/utils'
 import { useBaseRouteState } from './use-base-route-state'
-import { serializeValue, toResolvedOptions } from './utils'
+import { toResolvedOptions } from './utils'
 
 export interface BatchOptions {
   history?: HistoryMode
 }
 
-type Refs<TOptions extends readonly RouteStateOptions<any>[]> = {
+type Refs<TOptions extends readonly RouteStateOptions[]> = {
   [TOption in TOptions[number] as TOption['key']]: Ref<
-    InferRouteStateValue<TOption['parser']>,
-    InferRouteStateInput<TOption['parser']>
+    InferInputValue<TOption['parser']>,
+    InferInputWritable<TOption['parser']>
   >
 }
 
-type StatePatch<TOptions extends readonly RouteStateOptions<any>[]> = Partial<{
-  [TOption in TOptions[number] as TOption['key']]: InferRouteStateInput<TOption['parser']>
+type StatePatch<TOptions extends readonly RouteStateOptions[]> = Partial<{
+  [TOption in TOptions[number] as TOption['key']]: InferInputWritable<TOption['parser']>
 }>
 
-type StateSnapshot<TOptions extends readonly RouteStateOptions<any>[]> = {
-  [TOption in TOptions[number] as TOption['key']]: InferRouteStateValue<TOption['parser']>
+type StateSnapshot<TOptions extends readonly RouteStateOptions[]> = {
+  [TOption in TOptions[number] as TOption['key']]: InferInputValue<TOption['parser']>
 }
 
-export interface UseRouteStatesApi<TOptions extends readonly RouteStateOptions<any>[]> {
+export interface UseRouteStatesApi<TOptions extends readonly RouteStateOptions[]> {
   set: (patch: StatePatch<TOptions>, options?: BatchOptions) => void
   reset: (options?: BatchOptions) => void
   toObject: () => StateSnapshot<TOptions>
 }
 
-export type UseRouteStatesReturn<TOptions extends readonly RouteStateOptions<any>[]> =
-  Refs<TOptions> & UseRouteStatesApi<TOptions>
+export type UseRouteStatesReturn<TOptions extends readonly RouteStateOptions[]> = Refs<TOptions> &
+  UseRouteStatesApi<TOptions>
 
 function resolveBatchHistory(
   candidates: readonly HistoryMode[],
@@ -48,7 +45,7 @@ function resolveBatchHistory(
   return candidates.includes('push') ? 'push' : 'replace'
 }
 
-export function useRouteStates<const TOptions extends readonly RouteStateOptions<any>[]>(
+export function useRouteStates<const TOptions extends readonly RouteStateOptions[]>(
   configs: TOptions,
 ): UseRouteStatesReturn<TOptions> {
   const { createRouteStateRef, navigate } = useBaseRouteState()
