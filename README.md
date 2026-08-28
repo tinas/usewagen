@@ -112,3 +112,11 @@ Disable declaration output (e.g. in JS projects):
 ```ts
 usewagen({ dts: false })
 ```
+
+The generated declaration file also types the `virtual:usewagen` side-effect
+import. If you set `dts: false` in a TypeScript project, add the reference
+yourself:
+
+```ts
+/// <reference types="usewagen/client" />
+```

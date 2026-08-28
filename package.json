@@ -13,6 +13,7 @@
     "url": "git+https://github.com/tinas/usewagen.git"
   },
   "files": [
+    "client.d.ts",
     "dist"
   ],
   "type": "module",
@@ -22,7 +23,10 @@
     "./router": "./dist/router/index.mjs",
     "./storage": "./dist/storage/index.mjs",
     "./vite": "./dist/vite/index.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./client.d.ts"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -40,6 +44,7 @@
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
     "typescript": "^7.0.2",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {

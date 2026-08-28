@@ -15,7 +15,12 @@ export default defineConfig({
     dts: {
       tsgo: true,
     },
-    exports: true,
+    exports: {
+      customExports(exports: Record<string, unknown>) {
+        exports['./client'] = { types: './client.d.ts' }
+        return exports
+      },
+    },
   },
   lint: {
     options: {
