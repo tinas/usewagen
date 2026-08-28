@@ -1,4 +1,4 @@
-import type { Plugin } from 'vite-plus'
+import type { Plugin } from 'vite'
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, relative, resolve } from 'node:path'
