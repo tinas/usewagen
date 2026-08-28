@@ -239,4 +239,36 @@ export const parseAsReal = defineParser({ parse: v => v, serialize: v => v })
 
     expect(existsSync(dtsPath)).toBe(false)
   })
+
+  test('ignores parser exports inside comments and strings', () => {
+    createFixture(
+      'commented.ts',
+      `
+import { defineParser } from 'usewagen'
+
+// export const parseAsCommented = defineParser({ parse: v => v, serialize: String })
+
+/*
+export const parseAsBlockCommented = defineParser({ parse: v => v, serialize: String })
+*/
+
+const snippet = 'export const parseAsQuoted = 1'
+const pattern = /export const parseAsRegex/
+
+export const parseAsReal = defineParser({ parse: v => v, serialize: String })
+`,
+    )
+
+    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
+    const configResolved = plugin.configResolved as (config: { root: string }) => void
+    configResolved({ root: import.meta.dirname })
+
+    const dtsContent = readFileSync(dtsPath, 'utf-8')
+
+    expect(dtsContent).toContain('parseAsReal')
+    expect(dtsContent).not.toContain('parseAsCommented')
+    expect(dtsContent).not.toContain('parseAsBlockCommented')
+    expect(dtsContent).not.toContain('parseAsQuoted')
+    expect(dtsContent).not.toContain('parseAsRegex')
+  })
 })
