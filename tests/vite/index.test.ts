@@ -238,6 +238,31 @@ describe('hot updates', () => {
     expect(harness.sent).toEqual([])
   })
 
+  test('ignores a sibling directory whose name starts with the scanned one', () => {
+    const { plugin } = setup()
+    const harness = fakeServer()
+
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    harness.emit('change', `${parsersDir}-legacy/money.ts`)
+    harness.emit('change', `${parsersDir}.backup/money.ts`)
+
+    expect(harness.sent).toEqual([])
+  })
+
+  test('reacts to a parser file inside the scanned directory', () => {
+    const file = writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin } = setup()
+    const harness = fakeServer()
+
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    harness.emit('change', file)
+
+    expect(harness.sent).toEqual([{ type: 'full-reload' }])
+  })
+
   test('ignores watcher events it does not act on', () => {
     writeParser('money.ts', 'export const parseAsMoney = 1')
 
