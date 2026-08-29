@@ -2,7 +2,7 @@ import type { Plugin } from 'vite'
 import type { ParserEntry } from './scan'
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { generateDeclaration, generateModule } from './generate'
 import { isParserFile, scanParsers } from './scan'
 
@@ -20,6 +20,11 @@ export interface WagenPluginOptions {
    * @default 'usewagen.d.ts'
    */
   dts?: string | false
+}
+
+function contains(dir: string, path: string): boolean {
+  const target = relative(dir, path)
+  return !isAbsolute(target) && !target.startsWith(`..${sep}`)
 }
 
 export function usewagen(options: WagenPluginOptions = {}): Plugin {
@@ -46,7 +51,7 @@ export function usewagen(options: WagenPluginOptions = {}): Plugin {
   }
 
   function isScanned(path: string): boolean {
-    return dirs.some(dir => path.startsWith(dir)) && isParserFile(basename(path))
+    return dirs.some(dir => contains(dir, path)) && isParserFile(basename(path))
   }
 
   return {
