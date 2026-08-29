@@ -1,7 +1,7 @@
 import type { Parser, ParserWithDefault } from '../../src/parser/parsers'
-import type { InferInputValue, InferInputWritable } from '../../src/parser/types'
+import type { InferInputValue, InferInputWritable, ParserInput } from '../../src/parser/types'
 
-import { describe, expectTypeOf, test } from 'vite-plus/test'
+import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
 
 describe('InferInputValue', () => {
   test('ParserWithDefault<T> infers T (non-nullable)', () => {
@@ -16,6 +16,11 @@ describe('InferInputValue', () => {
 
   test('name-based ref with defaultValue infers the parser value type', () => {
     type Result = InferInputValue<{ name: 'parseAsInteger'; defaultValue: number }>
+    expectTypeOf<Result>().toEqualTypeOf<number>()
+  })
+
+  test('name-based ref with a factory defaultValue infers the parser value type', () => {
+    type Result = InferInputValue<{ name: 'parseAsInteger'; defaultValue: () => number }>
     expectTypeOf<Result>().toEqualTypeOf<number>()
   })
 
@@ -64,5 +69,21 @@ describe('InferInputWritable', () => {
   test('an omitted parser (undefined) widens to string | null | undefined', () => {
     type Result = InferInputWritable<undefined>
     expectTypeOf<Result>().toEqualTypeOf<string | null | undefined>()
+  })
+})
+
+describe('named parser ref defaultValue', () => {
+  test('accepts both a value and a factory, and rejects the wrong type', () => {
+    const asValue: ParserInput = { name: 'parseAsInteger', defaultValue: 1 }
+    const asFactory: ParserInput = { name: 'parseAsInteger', defaultValue: () => 1 }
+
+    function reject() {
+      // @ts-expect-error the factory must return the parser value type
+      const bad: ParserInput = { name: 'parseAsInteger', defaultValue: () => 'nope' }
+      return bad
+    }
+
+    expect([asValue, asFactory]).toHaveLength(2)
+    expect(typeof reject).toBe('function')
   })
 })

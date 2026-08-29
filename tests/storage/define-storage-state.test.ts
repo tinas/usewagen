@@ -181,3 +181,16 @@ describe('defineStorageState', () => {
     expect(wagen.storage.local.getItem('theme')).toBe('dark')
   })
 })
+
+describe('defineStorageState option typing', () => {
+  test('the definition layer takes plain options, not reactive ones', () => {
+    function reject() {
+      // @ts-expect-error reactivity belongs to the composables, not the definition
+      defineStorageState({ key: () => 'theme' })
+      // @ts-expect-error reactivity belongs to the composables, not the definition
+      defineStorageState({ key: 'theme', clearOnDefault: () => true })
+    }
+
+    expect(typeof reject).toBe('function')
+  })
+})

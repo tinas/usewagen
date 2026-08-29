@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
+import { ref } from 'vue'
 
 import { defineParser } from '../../src/parser/parsers'
 import { useRouteHash } from '../../src/router/use-route-hash'
@@ -149,6 +150,48 @@ describe('useRouteHash', () => {
   })
 })
 
+describe('useRouteHash reactive options', () => {
+  test('a getter history is honoured at write time', async () => {
+    const history = ref<'push' | 'replace'>('replace')
+    const hash = run(() => useRouteHash({ history: () => history.value }))
+
+    hash.value = '#first'
+    await flush()
+
+    history.value = 'push'
+    hash.value = '#second'
+    await flush()
+
+    ctx.router.back()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.hash).toBe('#first')
+  })
+
+  test('a ref clearOnDefault is honoured at write time', async () => {
+    const clear = ref(true)
+    const parser = defineParser<string>({ parse: v => v }).withDefault('#top')
+    const hash = run(() => useRouteHash({ parser, clearOnDefault: clear }))
+
+    hash.value = '#top'
+    await flush()
+    expect(ctx.router.currentRoute.value.hash).toBe('')
+
+    clear.value = false
+    hash.value = '#top'
+    await flush()
+    expect(ctx.router.currentRoute.value.hash).toBe('#top')
+  })
+
+  test('the whole options object can be a getter', async () => {
+    await ctx.router.push('/#section')
+    const history = ref<'push' | 'replace'>('replace')
+    const hash = run(() => useRouteHash(() => ({ history: history.value })))
+
+    expect(hash.value).toBe('#section')
+  })
+})
+
 describe('useRouteHash type inference', () => {
   test('falls back to the default parser when no options are given', () => {
     const hash = run(() => useRouteHash())
@@ -168,6 +211,8 @@ describe('useRouteHash option typing', () => {
     function reject() {
       // @ts-expect-error unknown option
       useRouteHash({ historyy: 'push' })
+      // @ts-expect-error a getter must still return a valid option type
+      useRouteHash({ history: () => 'nope' })
     }
 
     expect(typeof reject).toBe('function')

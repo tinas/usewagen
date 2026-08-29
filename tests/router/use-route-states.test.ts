@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
+import { computed, ref } from 'vue'
 
+import { parseAsInteger } from '../../src/parser/parsers'
 import { useRouteStates } from '../../src/router/use-route-states'
 import { flush, setupRouter } from '../__helpers__/router'
 
@@ -135,6 +137,122 @@ describe('useRouteStates', () => {
   })
 })
 
+describe('useRouteStates reactive options', () => {
+  test('refs follow a reactive urlKey', async () => {
+    await ctx.router.push('/?a_page=4&b_page=9')
+
+    const tenant = ref('a')
+    const state = run(() =>
+      useRouteStates([
+        { key: 'page', urlKey: () => `${tenant.value}_page`, parser: { name: 'parseAsInteger' } },
+      ]),
+    )
+
+    expect(state.page.value).toBe(4)
+    tenant.value = 'b'
+    expect(state.page.value).toBe(9)
+  })
+
+  test('set writes through the current urlKey in a single navigation', async () => {
+    await ctx.router.push('/?a_page=4')
+
+    const tenant = ref('a')
+    const state = run(() =>
+      useRouteStates([
+        { key: 'page', urlKey: () => `${tenant.value}_page`, parser: { name: 'parseAsInteger' } },
+        { key: 'q' },
+      ]),
+    )
+
+    tenant.value = 'b'
+    let navigations = 0
+    ctx.router.afterEach(() => navigations++)
+
+    state.set({ page: 7, q: 'vue' })
+    await flush()
+
+    expect(navigations).toBe(1)
+    expect(ctx.router.currentRoute.value.query.b_page).toBe('7')
+    expect(ctx.router.currentRoute.value.query.q).toBe('vue')
+    expect(ctx.router.currentRoute.value.query.a_page).toBe('4')
+  })
+
+  test('reset clears the current urlKey and leaves the previous one', async () => {
+    await ctx.router.push('/?a_page=5&b_page=6')
+
+    const tenant = ref('a')
+    const state = run(() =>
+      useRouteStates([
+        {
+          key: 'page',
+          urlKey: () => `${tenant.value}_page`,
+          parser: { name: 'parseAsInteger', defaultValue: 1 },
+        },
+      ]),
+    )
+
+    tenant.value = 'b'
+    state.reset()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.b_page).toBeUndefined()
+    expect(ctx.router.currentRoute.value.query.a_page).toBe('5')
+  })
+
+  test('toObject re-evaluates inside a computed', async () => {
+    await ctx.router.push('/?a_page=1&b_page=2')
+
+    const tenant = ref('a')
+    const state = run(() =>
+      useRouteStates([
+        { key: 'page', urlKey: () => `${tenant.value}_page`, parser: { name: 'parseAsInteger' } },
+      ]),
+    )
+    const snapshot = computed(() => state.toObject())
+
+    expect(snapshot.value).toEqual({ page: 1 })
+    tenant.value = 'b'
+    expect(snapshot.value).toEqual({ page: 2 })
+  })
+
+  test('set honours a reactive history at call time', async () => {
+    const history = ref<'push' | 'replace'>('replace')
+    const state = run(() =>
+      useRouteStates([{ key: 'page', history: () => history.value, parser: PAGE.parser }]),
+    )
+
+    state.set({ page: 2 })
+    await flush()
+
+    history.value = 'push'
+    state.set({ page: 3 })
+    await flush()
+
+    ctx.router.back()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.page).toBe('2')
+  })
+
+  test('set honours a reactive source at call time', async () => {
+    await ctx.router.push('/item/1')
+
+    const source = ref<'query' | 'params'>('query')
+    const state = run(() => useRouteStates([{ key: 'id', source: () => source.value }]))
+
+    state.set({ id: 'q1' })
+    await flush()
+    expect(ctx.router.currentRoute.value.query.id).toBe('q1')
+
+    source.value = 'params'
+    expect(state.id.value).toBe('1')
+
+    state.set({ id: '9' })
+    await flush()
+    expect(ctx.router.currentRoute.value.params.id).toBe('9')
+  })
+})
+
 describe('useRouteStates type inference', () => {
   test('a key without a parser is typed as string | null', () => {
     const state = run(() => useRouteStates([{ key: 'q' }, PAGE]))
@@ -151,5 +269,32 @@ describe('useRouteStates option typing', () => {
 
     expectTypeOf(state.q.value).toEqualTypeOf<string | null>()
     expectTypeOf(state.page.value).toEqualTypeOf<number | null>()
+  })
+
+  test('reactive fields keep the literal keys and the parser inference', () => {
+    const tenant = ref('a')
+    const state = run(() =>
+      useRouteStates([
+        {
+          key: 'page',
+          urlKey: () => `${tenant.value}_page`,
+          parser: parseAsInteger.withDefault(1),
+        },
+        { key: 'q', history: ref<'push'>('push') },
+      ]),
+    )
+
+    expectTypeOf(state.page.value).toEqualTypeOf<number>()
+    expectTypeOf(state.q.value).toEqualTypeOf<string | null>()
+    expectTypeOf(state.toObject()).toEqualTypeOf<{ page: number; q: string | null }>()
+  })
+
+  test('rejects a reactive key, because it names the returned ref', () => {
+    function reject() {
+      // @ts-expect-error key must stay a literal so the return type can map it
+      useRouteStates([{ key: () => 'page' }])
+    }
+
+    expect(typeof reject).toBe('function')
   })
 })

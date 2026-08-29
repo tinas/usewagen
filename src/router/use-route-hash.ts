@@ -1,12 +1,14 @@
-import type { MaybeRefOrGetter, Ref } from 'vue'
+import type { Ref } from 'vue'
+import type { ReactiveOptions } from '../options'
 import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
 import type { ResolvedParser } from '../parser/resolve'
 import type { ResolvedWagenRouterOptions } from '../wagen'
 import type { HistoryMode } from './types'
 
-import { computed, customRef, getCurrentScope, nextTick, toValue } from 'vue'
+import { computed, customRef, getCurrentScope, nextTick } from 'vue'
 import { ErrorCodes, warnDev } from '../messages'
 import { useRoute, useRouter } from 'vue-router'
+import { toValueDeep } from '../options'
 import { resolveParser } from '../parser/resolve'
 import { parseValue, serializeValue } from '../parser/utils'
 import { getActiveWagen } from '../wagen'
@@ -17,7 +19,8 @@ export interface RouteHashOptions {
   clearOnDefault?: boolean
 }
 
-export type UseRouteHashOptions = MaybeRefOrGetter<RouteHashOptions>
+export type UseRouteHashOptions<P extends ParserInput | undefined = ParserInput | undefined> =
+  ReactiveOptions<Omit<RouteHashOptions, 'parser'> & { parser?: P }, 'parser'>
 
 interface ResolvedRouteHashOptions {
   parser: ResolvedParser<any>
@@ -26,18 +29,18 @@ interface ResolvedRouteHashOptions {
 }
 
 function toResolvedHashOptions(
-  input: RouteHashOptions,
+  options: RouteHashOptions,
   defaults: ResolvedWagenRouterOptions,
 ): ResolvedRouteHashOptions {
   return {
-    parser: resolveParser(input.parser),
-    history: input.history ?? defaults.history,
-    clearOnDefault: input.clearOnDefault ?? defaults.clearOnDefault,
+    parser: resolveParser(options.parser),
+    history: options.history ?? defaults.history,
+    clearOnDefault: options.clearOnDefault ?? defaults.clearOnDefault,
   }
 }
 
 export function useRouteHash<P extends ParserInput | undefined = undefined>(
-  options?: MaybeRefOrGetter<Omit<RouteHashOptions, 'parser'> & { parser?: P }>,
+  options?: UseRouteHashOptions<P>,
 ): Ref<InferInputValue<P>, InferInputWritable<P>>
 
 export function useRouteHash(options: UseRouteHashOptions = {}) {
@@ -48,7 +51,7 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
   const defaults = getActiveWagen().router
 
   const resolvedOptions = computed<ResolvedRouteHashOptions>(() =>
-    toResolvedHashOptions(toValue(options), defaults),
+    toResolvedHashOptions(toValueDeep<RouteHashOptions>(options), defaults),
   )
 
   return customRef(track => ({

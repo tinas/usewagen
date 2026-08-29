@@ -1,4 +1,4 @@
-import type { Parser, ParserWithDefault } from './parsers'
+import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
 
 export type BuiltinParsers = {
   parseAsString: Parser<string>
@@ -18,7 +18,7 @@ export type InferParserValue<P> = P extends Parser<infer T> ? T : never
 type NamedParserRef = {
   [K in keyof KnownParsers]: {
     name: K
-    defaultValue?: InferParserValue<KnownParsers[K]>
+    defaultValue?: DefaultValue<InferParserValue<KnownParsers[K]>>
   }
 }[keyof KnownParsers]
 
