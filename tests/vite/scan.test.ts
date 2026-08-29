@@ -28,6 +28,16 @@ describe('isParserFile', () => {
     expect(isParserFile('types.d.mts')).toBe(false)
   })
 
+  test('only .d.ts and .d.mts count as declarations', () => {
+    expect(isParserFile('types.d.js')).toBe(true)
+    expect(isParserFile('types.d.mjs')).toBe(true)
+  })
+
+  test('rejects a name that is only an extension', () => {
+    expect(isParserFile('.ts')).toBe(false)
+    expect(isParserFile('money')).toBe(false)
+  })
+
   test('rejects anything that is not a module', () => {
     expect(isParserFile('notes.md')).toBe(false)
     expect(isParserFile('money.json')).toBe(false)

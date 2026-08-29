@@ -1,6 +1,7 @@
 import type { ParserEntry } from '../../src/vite/scan'
 
 import { describe, expect, test } from 'vite-plus/test'
+import { resolve, sep } from 'node:path'
 
 import { generateDeclaration, generateModule } from '../../src/vite/generate'
 
@@ -36,10 +37,18 @@ describe('generateModule', () => {
   })
 
   test('writes posix separators so the specifier survives Windows', () => {
-    const generated = generateModule([{ name: 'parseAsMoney', file: 'C:\\app\\parsers\\money.ts' }])
+    const generated = generateModule([
+      { name: 'parseAsMoney', file: resolve('/app/parsers/money.ts') },
+    ])
 
-    expect(generated).toContain('from "C:/app/parsers/money.ts"')
+    expect(generated).toContain('/app/parsers/money.ts"')
     expect(generated).not.toContain('\\')
+  })
+
+  test.skipIf(sep !== '/')('a backslash in a posix file name is kept verbatim', () => {
+    const generated = generateModule([{ name: 'parseAsMoney', file: '/app/we\\ird.ts' }])
+
+    expect(generated).toContain(String.raw`from "/app/we\\ird.ts"`)
   })
 
   test('quotes the specifier so paths with spaces stay valid', () => {
