@@ -1,275 +1,268 @@
-import { afterEach, describe, expect, test } from 'vite-plus/test'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import type { Plugin } from 'vite'
 
-import { usewagen } from '../../src/vite'
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { existsSync, readFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 
-const fixtureDir = resolve(import.meta.dirname, '__fixtures__/parsers')
-const dtsPath = resolve(import.meta.dirname, '__fixtures__/usewagen.d.ts')
+import { PARSERS_ID, RESOLVED_PARSERS_ID, usewagen } from '../../src/vite'
+import type { WagenPluginOptions } from '../../src/vite'
+import { createFixtures } from './__helpers__'
 
-function createFixture(name: string, content: string) {
-  if (!existsSync(fixtureDir)) mkdirSync(fixtureDir, { recursive: true })
-  writeFileSync(resolve(fixtureDir, name), content, 'utf-8')
-}
+const { root: fixtureRoot, parsersDir, dtsPath, writeParser, clean } = createFixtures('plugin')
 
-function cleanup() {
-  if (existsSync(resolve(import.meta.dirname, '__fixtures__'))) {
-    rmSync(resolve(import.meta.dirname, '__fixtures__'), { recursive: true })
+type WatchListener = (event: string, path: string) => void
+
+function setup(options: WagenPluginOptions = { dirs: parsersDir, dts: dtsPath }) {
+  const plugin = usewagen(options)
+  const watched: string[] = []
+
+  const configResolved = plugin.configResolved as (config: { root: string }) => void
+  configResolved({ root: fixtureRoot })
+
+  const rawLoad = plugin.load as (this: unknown, id: string) => string | undefined
+  const rawResolveId = plugin.resolveId as (id: string) => string | undefined
+
+  return {
+    plugin,
+    watched,
+    resolveId: (id: string) => rawResolveId(id),
+    load: (id: string = RESOLVED_PARSERS_ID) =>
+      rawLoad.call({ addWatchFile: (file: string) => watched.push(file) }, id),
   }
 }
 
-describe('usewagen plugin', () => {
-  afterEach(() => cleanup())
+function fakeServer() {
+  const listeners: WatchListener[] = []
+  const added: string[] = []
+  const invalidated: unknown[] = []
+  const sent: unknown[] = []
+  const mod = { id: RESOLVED_PARSERS_ID }
+  let known = true
 
-  test('returns a plugin with the correct name', () => {
-    const plugin = usewagen()
+  const server = {
+    watcher: {
+      add: (dir: string) => added.push(dir),
+      on: (_event: string, listener: WatchListener) => listeners.push(listener),
+    },
+    moduleGraph: {
+      getModuleById: (id: string) => (known && id === RESOLVED_PARSERS_ID ? mod : undefined),
+      invalidateModule: (target: unknown) => invalidated.push(target),
+    },
+    ws: { send: (payload: unknown) => sent.push(payload) },
+  }
+
+  return {
+    server,
+    added,
+    invalidated,
+    sent,
+    mod,
+    forget: () => (known = false),
+    emit: (event: string, path: string) => {
+      for (const listener of listeners) listener(event, path)
+    },
+  }
+}
+
+afterEach(() => {
+  clean()
+  vi.restoreAllMocks()
+})
+
+describe('plugin shape', () => {
+  test('is a valid vite plugin with the expected name', () => {
+    const plugin: Plugin = usewagen()
 
     expect(plugin.name).toBe('usewagen')
   })
 
-  test('skips exports that collide with a built-in parser name', () => {
-    createFixture(
-      'shadow.ts',
-      `
-import { defineParser } from 'usewagen'
+  test('resolves the parsers module id and nothing else', () => {
+    const { resolveId } = setup()
 
-export const parseAsString = defineParser({ parse: v => v, serialize: String })
-export const parseAsMoney = defineParser({ parse: v => Number(v), serialize: String })
-`,
-    )
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const dtsContent = readFileSync(dtsPath, 'utf-8')
-
-    expect(dtsContent).toContain('parseAsMoney')
-    expect(dtsContent).not.toContain('parseAsString')
-
-    const load = plugin.load as (id: string) => string | undefined
-    const virtualModule = load('\0virtual:usewagen')!
-
-    expect(virtualModule).toContain("registerParser('parseAsMoney'")
-    expect(virtualModule).not.toContain("registerParser('parseAsString'")
+    expect(resolveId(PARSERS_ID)).toBe(RESOLVED_PARSERS_ID)
+    expect(resolveId('usewagen')).toBeUndefined()
+    expect(resolveId('virtual:usewagen')).toBeUndefined()
   })
 
-  test('resolves the virtual module id', () => {
-    const plugin = usewagen()
-    const resolveId = plugin.resolveId as (id: string) => string | undefined
+  test('load ignores every other id', () => {
+    const { load } = setup()
 
-    expect(resolveId('virtual:usewagen')).toBe('\0virtual:usewagen')
-    expect(resolveId('other-module')).toBeUndefined()
+    expect(load('some-other-id')).toBeUndefined()
   })
-
-  test('generates the expected dts structure', () => {
-    createFixture(
-      'pagination.ts',
-      `
-import { defineParser, parseAsStringLiteral } from 'usewagen'
-
-export const parseAsPage = defineParser({
-  parse: v => Number(v),
-  serialize: v => String(v),
 })
 
-export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
-`,
-    )
+describe('module generation', () => {
+  test('serves the parsers found in the scanned directory', () => {
+    writeParser('money.ts', 'export const parseAsMoney = defineParser({})')
 
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
+    const content = setup().load()!
 
-    const content = readFileSync(dtsPath, 'utf-8')
-
-    expect(content).toMatchInlineSnapshot(`
-      "// Auto-generated by usewagen/vite — do not edit
-      /// <reference types="usewagen/client" />
-      export {}
-
-      declare module 'usewagen' {
-        interface CustomParsers {
-          parseAsPage: typeof import('./parsers/pagination')['parseAsPage']
-          parseAsSort: typeof import('./parsers/pagination')['parseAsSort']
-        }
-      }
-      "
-    `)
+    expect(content).toContain('parseAsMoney')
+    expect(content).toContain('export const parsers = {')
   })
 
-  test('generates a virtual module with registerParser calls', () => {
-    createFixture(
-      'pagination.ts',
-      `
-import { defineParser, parseAsStringLiteral } from 'usewagen'
+  test('serves an empty table when the directory is missing', () => {
+    const content = setup({ dirs: '/nonexistent/path', dts: false }).load()!
 
-export const parseAsPage = defineParser({
-  parse: v => Number(v),
-  serialize: v => String(v),
+    expect(content).toContain('export const parsers = {}')
+  })
+
+  test('registers the scanned directories and files as watch dependencies', () => {
+    const file = writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { load, watched } = setup()
+    load()
+
+    expect(watched).toContain(parsersDir)
+    expect(watched).toContain(file)
+  })
+
+  test('resolves dirs relative to the vite root', () => {
+    const file = writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { load, watched } = setup({ dirs: 'parsers', dts: false })
+    load()
+
+    expect(watched).toContain(file)
+  })
+
+  test('accepts several directories', () => {
+    writeParser('a.ts', 'export const parseAsA = 1')
+    writeParser('nested/b.ts', 'export const parseAsB = 1')
+
+    const content = setup({ dirs: [parsersDir, `${parsersDir}/nested`], dts: false }).load()!
+
+    expect(content).toContain('parseAsA')
+    expect(content).toContain('parseAsB')
+  })
 })
 
-export const parseAsSort = parseAsStringLiteral(['asc', 'desc'])
-`,
-    )
+describe('declaration file', () => {
+  test('is written on configResolved', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
 
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
+    setup()
 
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!.replaceAll(fixtureDir, '<parsers>')
-
-    expect(content).toMatchInlineSnapshot(`
-      "import { registerParser } from 'usewagen/registry'
-
-      import { parseAsPage, parseAsSort } from '<parsers>/pagination.ts'
-
-      registerParser('parseAsPage', parseAsPage)
-      registerParser('parseAsSort', parseAsSort)
-      "
-    `)
+    expect(readFileSync(dtsPath, 'utf-8')).toContain('parseAsMoney')
   })
 
-  test('ignores function exports (factories)', () => {
-    createFixture(
-      'factory.ts',
-      `
-import { defineParser } from 'usewagen'
+  test('is not written when dts is false', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
 
-export function parseAsCustom(values: string[]) {
-  return defineParser({ parse: v => v, serialize: v => v })
-}
-
-export const parseAsValid = defineParser({
-  parse: v => v,
-  serialize: v => v,
-})
-`,
-    )
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!
-
-    expect(content).toContain('parseAsValid')
-    expect(content).not.toContain('parseAsCustom')
-  })
-
-  test('ignores .d.ts files', () => {
-    createFixture(
-      'types.d.ts',
-      `
-export const parseAsIgnored = {}
-`,
-    )
-    createFixture(
-      'real.ts',
-      `
-export const parseAsReal = defineParser({ parse: v => v, serialize: v => v })
-`,
-    )
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!
-
-    expect(content).toContain('parseAsReal')
-    expect(content).not.toContain('parseAsIgnored')
-  })
-
-  test('handles an empty directory', () => {
-    if (!existsSync(fixtureDir)) mkdirSync(fixtureDir, { recursive: true })
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!
-
-    expect(content).toContain("import { registerParser } from 'usewagen/registry'")
-    expect(content).not.toContain('parseAs')
-  })
-
-  test('handles a non-existent directory', () => {
-    const plugin = usewagen({ dirs: '/nonexistent/path', dts: false })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!
-
-    expect(content).not.toContain('parseAs')
-  })
-
-  test('scans nested directories', () => {
-    const nestedDir = resolve(fixtureDir, 'nested')
-    mkdirSync(nestedDir, { recursive: true })
-    writeFileSync(
-      resolve(nestedDir, 'deep.ts'),
-      `export const parseAsDeep = defineParser({ parse: v => v, serialize: v => v })`,
-      'utf-8',
-    )
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
-
-    const load = plugin.load as (id: string) => string | undefined
-    const content = load('\0virtual:usewagen')!
-
-    expect(content).toContain('parseAsDeep')
-  })
-
-  test('disables dts generation when dts is false', () => {
-    createFixture(
-      'noop.ts',
-      `export const parseAsNoop = defineParser({ parse: v => v, serialize: v => v })`,
-    )
-
-    const plugin = usewagen({ dirs: fixtureDir, dts: false })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
+    setup({ dirs: parsersDir, dts: false })
 
     expect(existsSync(dtsPath)).toBe(false)
   })
 
-  test('ignores parser exports inside comments and strings', () => {
-    createFixture(
-      'commented.ts',
-      `
-import { defineParser } from 'usewagen'
+  test('is left untouched when the content would not change', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
 
-// export const parseAsCommented = defineParser({ parse: v => v, serialize: String })
+    setup()
+    const first = readFileSync(dtsPath, 'utf-8')
 
-/*
-export const parseAsBlockCommented = defineParser({ parse: v => v, serialize: String })
-*/
+    setup()
 
-const snippet = 'export const parseAsQuoted = 1'
-const pattern = /export const parseAsRegex/
+    expect(readFileSync(dtsPath, 'utf-8')).toBe(first)
+  })
+})
 
-export const parseAsReal = defineParser({ parse: v => v, serialize: String })
-`,
-    )
+describe('hot updates', () => {
+  test('watches the configured directories', () => {
+    const { plugin } = setup()
+    const harness = fakeServer()
 
-    const plugin = usewagen({ dirs: fixtureDir, dts: dtsPath })
-    const configResolved = plugin.configResolved as (config: { root: string }) => void
-    configResolved({ root: import.meta.dirname })
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
 
-    const dtsContent = readFileSync(dtsPath, 'utf-8')
+    expect(harness.added).toContain(parsersDir)
+  })
 
-    expect(dtsContent).toContain('parseAsReal')
-    expect(dtsContent).not.toContain('parseAsCommented')
-    expect(dtsContent).not.toContain('parseAsBlockCommented')
-    expect(dtsContent).not.toContain('parseAsQuoted')
-    expect(dtsContent).not.toContain('parseAsRegex')
+  test('rescans, rewrites the dts and reloads on a parser change', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin, load } = setup()
+    expect(load()).toContain('parseAsMoney')
+
+    const harness = fakeServer()
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    writeParser('money.ts', 'export const parseAsCurrency = 1')
+    harness.emit('change', `${parsersDir}/money.ts`)
+
+    expect(load()).toContain('parseAsCurrency')
+    expect(load()).not.toContain('parseAsMoney')
+    expect(readFileSync(dtsPath, 'utf-8')).toContain('parseAsCurrency')
+    expect(harness.invalidated).toEqual([harness.mod])
+    expect(harness.sent).toEqual([{ type: 'full-reload' }])
+  })
+
+  test('picks up a newly added parser file', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin, load } = setup()
+    load()
+
+    const harness = fakeServer()
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    const added = writeParser('tax.ts', 'export const parseAsTax = 1')
+    harness.emit('add', added)
+
+    expect(load()).toContain('parseAsTax')
+  })
+
+  test('drops a removed parser file', () => {
+    const file = writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin, load } = setup()
+    load()
+
+    const harness = fakeServer()
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    rmSync(file)
+    harness.emit('unlink', file)
+
+    expect(load()).not.toContain('parseAsMoney')
+  })
+
+  test('ignores paths outside the scanned directories', () => {
+    const { plugin } = setup()
+    const harness = fakeServer()
+
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    harness.emit('change', `${fixtureRoot}/elsewhere.ts`)
+    harness.emit('change', `${parsersDir}/notes.md`)
+    harness.emit('change', `${parsersDir}/types.d.ts`)
+
+    expect(harness.sent).toEqual([])
+  })
+
+  test('ignores watcher events it does not act on', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin } = setup()
+    const harness = fakeServer()
+
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    harness.emit('addDir', `${parsersDir}/nested`)
+
+    expect(harness.sent).toEqual([])
+  })
+
+  test('does not reload when the module was never requested', () => {
+    writeParser('money.ts', 'export const parseAsMoney = 1')
+
+    const { plugin } = setup()
+    const harness = fakeServer()
+    harness.forget()
+
+    ;(plugin.configureServer as (server: unknown) => void)(harness.server)
+
+    harness.emit('change', `${parsersDir}/money.ts`)
+
+    expect(harness.sent).toEqual([])
+    expect(readFileSync(dtsPath, 'utf-8')).toContain('parseAsMoney')
   })
 })

@@ -1,7 +1,7 @@
 import type { StorageAdapter, StorageConfig, StorageInstance } from './create-storage'
 
 import { createStorage } from './create-storage'
-import { ErrorCodes, getMessage } from '../messages'
+import { ErrorCodes, warn } from '../messages'
 
 function memoryAdapter(): StorageAdapter {
   const store = new Map<string, string>()
@@ -69,7 +69,7 @@ function createWebStorage(name: 'local' | 'session', config: StorageConfig): Sto
 
   const adapter = webAdapter(name)
   if (!adapter) {
-    console.warn(getMessage(ErrorCodes.WEB_STORAGE_UNAVAILABLE), `${name}Storage`)
+    warn(ErrorCodes.WEB_STORAGE_UNAVAILABLE, `${name}Storage`)
     return createStorage(name, { ...memoryAdapter(), ...config, crossTab: false })
   }
 

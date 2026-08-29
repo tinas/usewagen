@@ -1,4 +1,4 @@
-import { ErrorCodes, getMessage } from '../messages'
+import { ErrorCodes, warn } from '../messages'
 
 export type ParserOptions<T> = {
   parse: (raw: string) => T | null
@@ -21,7 +21,7 @@ export function tryParse<I, R>(fn: (input: I) => R, input: I): R | null {
   try {
     return fn(input)
   } catch (error) {
-    console.warn(getMessage(ErrorCodes.PARSE_FAILED), input, error)
+    warn(ErrorCodes.PARSE_FAILED, input, error)
     return null
   }
 }

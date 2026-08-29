@@ -3,8 +3,9 @@ import type { InferInputValue, InferInputWritable, ParserInput } from '../parser
 import type { StorageState, StorageStateOptions } from './define-storage-state'
 
 import { customRef, getCurrentScope, onScopeDispose } from 'vue'
+import { ErrorCodes, warnDev } from '../messages'
 import { defineStorageState } from './define-storage-state'
-import { useWagenStorage } from './plugin'
+import { getActiveWagen } from '../wagen'
 
 export type UseLocalStorageOptions = Omit<StorageStateOptions, 'storage'>
 
@@ -18,8 +19,8 @@ function withResolvedStorage(options: StorageStateOptions): StorageStateOptions 
   const source = options.storage
   if (source && typeof source !== 'string') return options
 
-  const wagen = useWagenStorage()
-  return { ...options, storage: source ? wagen[source] : wagen.default }
+  const { storage } = getActiveWagen()
+  return { ...options, storage: source ? storage[source] : storage.default }
 }
 
 export function useStorage<T, W>(state: StorageState<T, W>): Ref<T, W>
@@ -28,6 +29,8 @@ export function useStorage<P extends ParserInput | undefined = undefined>(
 ): Ref<InferInputValue<P>, InferInputWritable<P>>
 
 export function useStorage(input: StorageState<any, any> | StorageStateOptions): Ref<any, any> {
+  if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useStorage')
+
   const state = isStorageState(input) ? input : defineStorageState(withResolvedStorage(input))
 
   return customRef((track, trigger) => {

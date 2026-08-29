@@ -5,13 +5,7 @@ export default defineConfig({
     '*': 'vp check --fix',
   },
   pack: {
-    entry: [
-      'src/index.ts',
-      'src/router/index.ts',
-      'src/storage/index.ts',
-      'src/registry.ts',
-      'src/vite/index.ts',
-    ],
+    entry: ['src/index.ts', 'src/router/index.ts', 'src/storage/index.ts', 'src/vite/index.ts'],
     dts: {
       tsgo: true,
     },
