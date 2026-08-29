@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, extname, resolve } from 'node:path'
 import { isBuiltinParserName } from '../parser/builtins'
 import { ErrorCodes, warn } from '../messages'
 import { stripNonCode } from './strip'
@@ -9,12 +9,17 @@ export interface ParserEntry {
   file: string
 }
 
-const PARSER_FILE = /\.m?[jt]s$/
-const DECLARATION_FILE = /\.d\.m?ts$/
+const MODULE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.mts'])
+const DECLARATION_EXTENSIONS = new Set(['.ts', '.mts'])
 const PARSER_EXPORT = /export\s+const\s+(parseAs\w+)/g
 
+function isDeclarationFile(name: string, extension: string): boolean {
+  return DECLARATION_EXTENSIONS.has(extension) && basename(name, extension).endsWith('.d')
+}
+
 export function isParserFile(name: string): boolean {
-  return PARSER_FILE.test(name) && !DECLARATION_FILE.test(name)
+  const extension = extname(name)
+  return MODULE_EXTENSIONS.has(extension) && !isDeclarationFile(name, extension)
 }
 
 function extractNames(file: string): string[] {
