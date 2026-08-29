@@ -1,18 +1,23 @@
 import type { StorageInstance } from '../../src/storage/create-storage'
 
-import { beforeEach, describe, expect, expectTypeOf, test } from 'vite-plus/test'
-import { effectScope, nextTick, watch } from 'vue'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from 'vite-plus/test'
+import { computed, effectScope, nextTick, ref, watch } from 'vue'
 
 import { parseAsInteger, parseAsJson } from '../../src/parser/parsers'
 import { createStorage } from '../../src/storage/create-storage'
 import { defineStorageState } from '../../src/storage/define-storage-state'
 import { createMemoryStorage } from '../../src/storage/presets'
-import { useStorage } from '../../src/storage/use-storage'
+import { useLocalStorage, useStorage } from '../../src/storage/use-storage'
+import { installWagen, resetWagen } from '../__helpers__/wagen'
 
 let storage: StorageInstance
 
 beforeEach(() => {
   storage = createMemoryStorage()
+})
+
+afterEach(() => {
+  resetWagen()
 })
 
 describe('useStorage', () => {
@@ -313,6 +318,250 @@ describe('useStorage over an existing state', () => {
 
     expect(theme.get()).toBe('dark')
     expect(useStorage(theme).value).toBe('dark')
+  })
+})
+
+describe('useStorage reactive options', () => {
+  test('a getter key moves the ref to another slot', () => {
+    storage.setItem('cfg:1', '10')
+    storage.setItem('cfg:2', '20')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const userId = ref(1)
+      const state = useStorage({
+        key: () => `cfg:${userId.value}`,
+        storage,
+        parser: parseAsInteger,
+      })
+
+      expect(state.value).toBe(10)
+      userId.value = 2
+      expect(state.value).toBe(20)
+    })
+    scope.stop()
+  })
+
+  test('a ref key works the same as a getter', () => {
+    storage.setItem('a', 'first')
+    storage.setItem('b', 'second')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('a')
+      const state = useStorage({ key, storage })
+
+      expect(state.value).toBe('first')
+      key.value = 'b'
+      expect(state.value).toBe('second')
+    })
+    scope.stop()
+  })
+
+  test('the whole options object can be a getter or a ref', () => {
+    storage.setItem('a', 'first')
+    storage.setItem('b', 'second')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('a')
+      const fromGetter = useStorage(() => ({ key: key.value, storage }))
+      const fromRef = useStorage(computed(() => ({ key: key.value, storage })))
+
+      expect(fromGetter.value).toBe('first')
+      expect(fromRef.value).toBe('first')
+
+      key.value = 'b'
+      expect(fromGetter.value).toBe('second')
+      expect(fromRef.value).toBe('second')
+    })
+    scope.stop()
+  })
+
+  test('writes land on the current key and never migrate the old one', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('a')
+      const state = useStorage({ key, storage })
+
+      state.value = 'kept'
+      key.value = 'b'
+
+      expect(state.value).toBeNull()
+      expect(storage.getItem('a')).toBe('kept')
+      expect(storage.has('b')).toBe(false)
+
+      state.value = 'fresh'
+      expect(storage.getItem('b')).toBe('fresh')
+      expect(storage.getItem('a')).toBe('kept')
+    })
+    scope.stop()
+  })
+
+  test('the subscription moves with the key', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('a')
+      const state = useStorage({ key, storage })
+      const seen: (string | null)[] = []
+      watch(state, value => seen.push(value), { flush: 'sync' })
+
+      storage.setItem('a', '1')
+      expect(seen).toEqual(['1'])
+
+      key.value = 'b'
+      expect(seen).toEqual(['1', null])
+
+      storage.setItem('a', '2')
+      expect(seen).toEqual(['1', null])
+
+      storage.setItem('b', '3')
+      expect(seen).toEqual(['1', null, '3'])
+    })
+    scope.stop()
+  })
+
+  test('a watcher fires when only the key changes', async () => {
+    storage.setItem('a', '1')
+    storage.setItem('b', '2')
+
+    const key = ref('a')
+    const seen: (number | null)[] = []
+    const scope = effectScope()
+
+    scope.run(() => {
+      const state = useStorage({ key, storage, parser: parseAsInteger })
+      watch(state, value => seen.push(value))
+    })
+
+    key.value = 'b'
+    await nextTick()
+    expect(seen).toEqual([2])
+
+    key.value = 'a'
+    await nextTick()
+    expect(seen).toEqual([2, 1])
+    scope.stop()
+  })
+
+  test('every key change releases the previous subscription', () => {
+    let subscribes = 0
+    let unsubscribes = 0
+    const subscribe = storage.subscribe
+    storage.subscribe = (key, listener) => {
+      subscribes++
+      const unsubscribe = subscribe(key, listener)
+      return () => {
+        unsubscribes++
+        unsubscribe()
+      }
+    }
+
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('k0')
+      useStorage({ key, storage })
+
+      for (let i = 1; i <= 3; i++) key.value = `k${i}`
+
+      expect(subscribes).toBe(4)
+      expect(unsubscribes).toBe(3)
+    })
+
+    scope.stop()
+    expect(unsubscribes).toBe(4)
+  })
+
+  test('a getter storage switches the backing instance', () => {
+    const other = createMemoryStorage()
+    storage.setItem('token', 'from-first')
+    other.setItem('token', 'from-second')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const useOther = ref(false)
+      const state = useStorage({
+        key: 'token',
+        storage: () => (useOther.value ? other : storage),
+      })
+
+      expect(state.value).toBe('from-first')
+      useOther.value = true
+      expect(state.value).toBe('from-second')
+    })
+    scope.stop()
+  })
+
+  test('a named storage source can be reactive', () => {
+    const { wagen, run } = installWagen()
+    wagen.storage.local.setItem('token', 'from-local')
+    wagen.storage.session.setItem('token', 'from-session')
+
+    run(() => {
+      const guest = ref(false)
+      const state = useStorage({
+        key: 'token',
+        storage: () => (guest.value ? 'session' : 'local'),
+      })
+
+      expect(state.value).toBe('from-local')
+      guest.value = true
+      expect(state.value).toBe('from-session')
+    })
+  })
+
+  test('clearOnDefault can be reactive', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const clear = ref(true)
+      const state = useStorage({
+        key: 'count',
+        storage,
+        clearOnDefault: clear,
+        parser: parseAsInteger.withDefault(0),
+      })
+
+      state.value = 0
+      expect(storage.has('count')).toBe(false)
+
+      clear.value = false
+      state.value = 0
+      expect(storage.getItem('count')).toBe('0')
+    })
+    scope.stop()
+  })
+
+  test('useLocalStorage keeps per-field getters', () => {
+    const { wagen, run } = installWagen()
+    wagen.storage.local.setItem('u:7', '5')
+
+    run(() => {
+      const id = ref(7)
+      const state = useLocalStorage({ key: () => `u:${id.value}`, parser: parseAsInteger })
+
+      expect(state.value).toBe(5)
+      id.value = 8
+      expect(state.value).toBeNull()
+
+      state.value = 3
+      expect(wagen.storage.local.getItem('u:8')).toBe('3')
+      expect(wagen.storage.local.getItem('u:7')).toBe('5')
+    })
+  })
+
+  test('every read still hits the storage after the key changed', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const key = ref('filters')
+      const state = useStorage({ key, storage, parser: parseAsJson<any>() })
+
+      state.value = { tags: ['a'] }
+      storage.setItem('filters', '{"tags":["x"]}')
+
+      expect(state.value).toEqual({ tags: ['x'] })
+      expect(state.value).not.toBe(state.value)
+    })
+    scope.stop()
   })
 })
 

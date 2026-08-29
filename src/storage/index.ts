@@ -13,5 +13,9 @@ export { defineStorageState } from './define-storage-state'
 
 export { createLocalStorage, createMemoryStorage, createSessionStorage } from './presets'
 
-export type { UseLocalStorageOptions, UseSessionStorageOptions } from './use-storage'
+export type {
+  UseLocalStorageOptions,
+  UseSessionStorageOptions,
+  UseStorageOptions,
+} from './use-storage'
 export { useLocalStorage, useSessionStorage, useStorage } from './use-storage'

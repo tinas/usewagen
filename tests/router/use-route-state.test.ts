@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { parseAsInteger } from '../../src/parser/parsers'
 import { useRouteState } from '../../src/router/use-route-state'
@@ -157,6 +157,105 @@ describe('useRouteState', () => {
   })
 })
 
+describe('useRouteState reactive options', () => {
+  test('a getter urlKey moves the state to another query param', async () => {
+    await ctx.router.push('/?a_page=4&b_page=9')
+
+    const tenant = ref('a')
+    const page = run(() =>
+      useRouteState({
+        key: 'page',
+        urlKey: () => `${tenant.value}_page`,
+        parser: parseAsInteger,
+      }),
+    )
+
+    expect(page.value).toBe(4)
+    tenant.value = 'b'
+    expect(page.value).toBe(9)
+  })
+
+  test('a write goes through the urlKey current at write time', async () => {
+    await ctx.router.push('/?a_page=4')
+
+    const tenant = ref('a')
+    const page = run(() =>
+      useRouteState({ key: 'page', urlKey: () => `${tenant.value}_page`, parser: parseAsInteger }),
+    )
+
+    tenant.value = 'b'
+    page.value = 7
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.b_page).toBe('7')
+    expect(ctx.router.currentRoute.value.query.a_page).toBe('4')
+  })
+
+  test('a ref source switches between query and params', async () => {
+    await ctx.router.push('/item/42?id=q')
+
+    const source = ref<'query' | 'params'>('query')
+    const id = run(() => useRouteState({ key: 'id', source }))
+
+    expect(id.value).toBe('q')
+    source.value = 'params'
+    expect(id.value).toBe('42')
+  })
+
+  test('a getter history is honoured at write time', async () => {
+    const history = ref<'push' | 'replace'>('replace')
+    const q = run(() => useRouteState({ key: 'q', history: () => history.value }))
+
+    q.value = 'first'
+    await flush()
+
+    history.value = 'push'
+    q.value = 'second'
+    await flush()
+
+    ctx.router.back()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.q).toBe('first')
+  })
+
+  test('a getter clearOnDefault is honoured at write time', async () => {
+    const clear = ref(true)
+    const page = run(() =>
+      useRouteState({
+        key: 'page',
+        parser: parseAsInteger.withDefault(1),
+        clearOnDefault: () => clear.value,
+      }),
+    )
+
+    page.value = 1
+    await flush()
+    expect(ctx.router.currentRoute.value.query.page).toBeUndefined()
+
+    clear.value = false
+    page.value = 1
+    await flush()
+    expect(ctx.router.currentRoute.value.query.page).toBe('1')
+  })
+
+  test('a factory defaultValue is re-read on every read', async () => {
+    const fallback = ref(1)
+    const page = run(() =>
+      useRouteState({
+        key: 'page',
+        parser: { name: 'parseAsInteger', defaultValue: () => fallback.value },
+      }),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number>()
+    expect(page.value).toBe(1)
+
+    fallback.value = 5
+    expect(page.value).toBe(5)
+  })
+})
+
 describe('useRouteState type inference', () => {
   test('falls back to the default parser when none is given', async () => {
     await ctx.router.push('/?q=vue')
@@ -214,8 +313,24 @@ describe('useRouteState option typing', () => {
       useRouteState({ key: 'q', source: 'nope' })
       // @ts-expect-error key is required
       useRouteState({ parser: parseAsInteger })
+      // @ts-expect-error a getter must still return a valid option type
+      useRouteState({ key: 'q', source: () => 'nope' })
     }
 
     expect(typeof reject).toBe('function')
+  })
+
+  test('reactive fields do not disturb the parser inference', () => {
+    const tenant = ref('a')
+    const page = run(() =>
+      useRouteState({
+        key: 'page',
+        urlKey: () => `${tenant.value}_page`,
+        history: ref<'push'>('push'),
+        parser: parseAsInteger.withDefault(1),
+      }),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number>()
   })
 })
