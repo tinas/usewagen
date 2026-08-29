@@ -2,8 +2,10 @@ import type { App } from 'vue'
 import type { RouteRecordRaw, Router } from 'vue-router'
 
 import { beforeEach } from 'vite-plus/test'
-import { createApp, nextTick } from 'vue'
+import { createApp, effectScope, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+
+import { resetWagen } from './wagen'
 
 const DEFAULT_ROUTES: RouteRecordRaw[] = [
   { path: '/', name: 'root', component: { template: '<div />' } },
@@ -21,6 +23,7 @@ export function setupRouter(routes: RouteRecordRaw[] = DEFAULT_ROUTES): RouterHa
   let router: Router
 
   beforeEach(async () => {
+    resetWagen()
     router = createRouter({ history: createMemoryHistory(), routes })
     app = createApp({ render: () => null })
     app.use(router)
@@ -35,7 +38,7 @@ export function setupRouter(routes: RouteRecordRaw[] = DEFAULT_ROUTES): RouterHa
     get router() {
       return router
     },
-    run: fn => app.runWithContext(fn) as ReturnType<typeof fn>,
+    run: fn => app.runWithContext(() => effectScope().run(fn)) as ReturnType<typeof fn>,
   }
 }
 

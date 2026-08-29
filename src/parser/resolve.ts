@@ -1,15 +1,10 @@
 import type { ParserInput } from './types'
 import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
 
-import { ErrorCodes, getMessage } from '../messages'
-import {
-  parseAsBoolean,
-  parseAsDate,
-  parseAsFloat,
-  parseAsIndex,
-  parseAsInteger,
-  parseAsString,
-} from './parsers'
+import { ErrorCodes, warn } from '../messages'
+import { getActiveWagen } from '../wagen'
+import { builtinParsers, isBuiltinParserName } from './builtins'
+import { parseAsString } from './parsers'
 
 export type ResolvedParser<T> = {
   parse: (raw: string) => T | null
@@ -17,34 +12,16 @@ export type ResolvedParser<T> = {
   defaultValue?: DefaultValue<T>
 }
 
-const builtins = new Map<string, Parser<any>>([
-  ['parseAsString', parseAsString],
-  ['parseAsInteger', parseAsInteger],
-  ['parseAsFloat', parseAsFloat],
-  ['parseAsIndex', parseAsIndex],
-  ['parseAsBoolean', parseAsBoolean],
-  ['parseAsDate', parseAsDate],
-])
-
-const registry = new Map<string, Parser<any>>()
-
-export function isBuiltinParserName(name: string): boolean {
-  return builtins.has(name)
-}
-
-export function registerParser(name: string, parser: Parser<any>): void {
-  if (builtins.has(name)) {
-    console.warn(getMessage(ErrorCodes.BUILTIN_PARSER_OVERRIDE), name)
-    return
-  }
-  registry.set(name, parser)
-}
+export { isBuiltinParserName }
 
 export function getParser(name: string): Parser<any> | undefined {
-  return builtins.get(name) ?? registry.get(name)
+  if (isBuiltinParserName(name)) return builtinParsers[name]
+
+  const { parsers } = getActiveWagen()
+  return Object.hasOwn(parsers, name) ? parsers[name] : undefined
 }
 
-function toResolvedParser<T>(parser: Parser<T>): ResolvedParser<T> {
+function fromParser<T>(parser: Parser<T>): ResolvedParser<T> {
   const resolved: ResolvedParser<T> = {
     parse: parser.parse,
     serialize: parser.serialize,
@@ -55,14 +32,41 @@ function toResolvedParser<T>(parser: Parser<T>): ResolvedParser<T> {
   return resolved
 }
 
+function fromName(
+  name: string,
+  override?: { defaultValue: DefaultValue<any> },
+): ResolvedParser<any> {
+  let warned = false
+
+  function get(): Parser<any> {
+    const found = getParser(name)
+    if (found) return found
+
+    if (!warned) {
+      warned = true
+      warn(ErrorCodes.UNKNOWN_PARSER_NAME, name)
+    }
+    return parseAsString
+  }
+
+  const base = {
+    parse: (raw: string) => get().parse(raw),
+    serialize: (value: any) => get().serialize(value),
+  }
+
+  if (override) return { ...base, defaultValue: override.defaultValue }
+
+  return {
+    ...base,
+    get defaultValue() {
+      return (get() as ParserWithDefault<any>).defaultValue
+    },
+  }
+}
+
 export function resolveParser(input: ParserInput = { name: 'parseAsString' }): ResolvedParser<any> {
-  if ('parse' in input) {
-    return toResolvedParser(input)
-  }
-  const parser = getParser(input.name) ?? parseAsString
-  const resolved = toResolvedParser(parser)
-  if ('defaultValue' in input) {
-    resolved.defaultValue = input.defaultValue
-  }
-  return resolved
+  if ('parse' in input) return fromParser(input)
+
+  const override = 'defaultValue' in input ? { defaultValue: input.defaultValue } : undefined
+  return fromName(input.name, override)
 }

@@ -1,23 +1,17 @@
 import { afterEach, describe, expect, test } from 'vite-plus/test'
-import { createApp } from 'vue'
 
 import { parseAsInteger, parseAsJson } from '../../src/parser/parsers'
 import { defineStorageState } from '../../src/storage/define-storage-state'
-import { createWagenStorage, setActiveStorage } from '../../src/storage/plugin'
 import { createMemoryStorage } from '../../src/storage/presets'
+import { getActiveWagen } from '../../src/wagen'
+import { installWagen as install, resetWagen } from '../__helpers__/wagen'
 
 function installWagen(defaultStorage?: 'local' | 'session') {
-  const wagen = createWagenStorage({
-    local: createMemoryStorage({ prefix: 'app:' }),
-    session: createMemoryStorage({ prefix: 'app:' }),
-    defaultStorage,
-  })
-  createApp({ render: () => null }).use(wagen)
-  return wagen
+  return install({ storage: { default: defaultStorage } }).wagen
 }
 
 afterEach(() => {
-  setActiveStorage(null)
+  resetWagen()
 })
 
 describe('defineStorageState', () => {
@@ -124,8 +118,8 @@ describe('defineStorageState', () => {
 
     theme.set('dark')
 
-    expect(theme.storage).toBe(wagen.local)
-    expect(wagen.local.getItem('theme')).toBe('dark')
+    expect(theme.storage).toBe(wagen.storage.local)
+    expect(wagen.storage.local.getItem('theme')).toBe('dark')
   })
 
   test('targets the session storage by name', () => {
@@ -134,8 +128,8 @@ describe('defineStorageState', () => {
 
     draft.set('hello')
 
-    expect(wagen.session.getItem('draft')).toBe('hello')
-    expect(wagen.local.has('draft')).toBe(false)
+    expect(wagen.storage.session.getItem('draft')).toBe('hello')
+    expect(wagen.storage.local.has('draft')).toBe(false)
   })
 
   test('without a storage it lands on the plugin default', () => {
@@ -144,8 +138,8 @@ describe('defineStorageState', () => {
 
     draft.set('hello')
 
-    expect(draft.storage).toBe(wagen.session)
-    expect(wagen.local.has('draft')).toBe(false)
+    expect(draft.storage).toBe(wagen.storage.session)
+    expect(wagen.storage.local.has('draft')).toBe(false)
   })
 
   test('a named storage wins over the plugin default', () => {
@@ -154,8 +148,8 @@ describe('defineStorageState', () => {
 
     theme.set('dark')
 
-    expect(wagen.local.getItem('theme')).toBe('dark')
-    expect(wagen.session.has('theme')).toBe(false)
+    expect(wagen.storage.local.getItem('theme')).toBe('dark')
+    expect(wagen.storage.session.has('theme')).toBe(false)
   })
 
   test('an explicit storage never touches the plugin', () => {
@@ -166,12 +160,24 @@ describe('defineStorageState', () => {
     seen.set('yes')
 
     expect(storage.getItem('seen')).toBe('yes')
-    expect(wagen.local.has('seen')).toBe(false)
+    expect(wagen.storage.local.has('seen')).toBe(false)
   })
 
-  test('defining without a plugin is fine; the first access throws', () => {
+  test('defining it without an instance falls back to the implicit default', () => {
     const theme = defineStorageState({ key: 'theme' })
 
-    expect(() => theme.get()).toThrow(/no storage instance found/)
+    expect(() => theme.set('dark')).not.toThrow()
+    expect(theme.storage).toBe(getActiveWagen().storage.local)
+  })
+
+  test('an instance installed after the definition still wins', () => {
+    const theme = defineStorageState({ key: 'theme' })
+    expect(theme.storage).toBe(getActiveWagen().storage.local)
+
+    const wagen = installWagen()
+    theme.set('dark')
+
+    expect(theme.storage).toBe(wagen.storage.local)
+    expect(wagen.storage.local.getItem('theme')).toBe('dark')
   })
 })

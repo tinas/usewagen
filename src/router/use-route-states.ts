@@ -3,8 +3,10 @@ import type { InferInputValue, InferInputWritable } from '../parser/types'
 import type { HistoryMode, RouteStateOptions } from './types'
 import type { RouteChange } from './use-base-route-state'
 
-import { nextTick } from 'vue'
+import { getCurrentScope, nextTick } from 'vue'
+import { ErrorCodes, warnDev } from '../messages'
 import { unwrapDefault } from '../parser'
+import { getActiveWagen } from '../wagen'
 import { serializeValue } from '../parser/utils'
 import { useBaseRouteState } from './use-base-route-state'
 import { toResolvedOptions } from './utils'
@@ -48,9 +50,12 @@ function resolveBatchHistory(
 export function useRouteStates<const TOptions extends readonly RouteStateOptions[]>(
   configs: TOptions,
 ): UseRouteStatesReturn<TOptions> {
-  const { createRouteStateRef, navigate } = useBaseRouteState()
+  if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useRouteStates')
 
-  const resolvedList = configs.map(config => toResolvedOptions(config))
+  const { createRouteStateRef, navigate } = useBaseRouteState()
+  const defaults = getActiveWagen().router
+
+  const resolvedList = configs.map(config => toResolvedOptions(config, defaults))
 
   const refs = Object.fromEntries(
     resolvedList.map(resolved => [resolved.key, createRouteStateRef(resolved)]),

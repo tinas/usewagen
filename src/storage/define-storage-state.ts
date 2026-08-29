@@ -1,10 +1,9 @@
 import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
 import type { StorageInstance, Unsubscribe } from './create-storage'
 
-import { ErrorCodes, getMessage } from '../messages'
 import { resolveParser } from '../parser/resolve'
 import { parseValue, serializeValue } from '../parser/utils'
-import { getActiveStorage } from './plugin'
+import { getActiveWagen } from '../wagen'
 
 export type StorageSource = StorageInstance | 'local' | 'session'
 
@@ -34,20 +33,12 @@ export function defineStorageState(options: StorageStateOptions): StorageState<a
 
   const parser = resolveParser(options.parser)
 
-  let resolved: StorageInstance | null = null
   function storage(): StorageInstance {
-    if (resolved) return resolved
     const source = options.storage
-    if (source && typeof source !== 'string') {
-      resolved = source
-      return resolved
-    }
+    if (source && typeof source !== 'string') return source
 
-    const wagen = getActiveStorage()
-    if (!wagen) throw new Error(getMessage(ErrorCodes.NO_STORAGE))
-
-    resolved = source ? wagen[source] : wagen.default
-    return resolved
+    const { storage } = getActiveWagen()
+    return source ? storage[source] : storage.default
   }
 
   return {

@@ -1,9 +1,19 @@
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 
-import { getParser, isBuiltinParserName, registerParser } from '../../src/registry'
 import { defineParser, parseAsFloat, parseAsInteger, parseAsString } from '../../src/parser/parsers'
-import { resolveParser } from '../../src/parser/resolve'
+import { getParser, isBuiltinParserName, resolveParser } from '../../src/parser/resolve'
 import { ErrorCodes, getMessage } from '../../src/messages'
+import { installWagen, resetWagen } from '../__helpers__/wagen'
+
+const parseAsShout = defineParser<string>({
+  parse: v => v.toUpperCase(),
+  serialize: v => v.toLowerCase(),
+})
+
+afterEach(() => {
+  resetWagen()
+  vi.restoreAllMocks()
+})
 
 describe('isBuiltinParserName', () => {
   test('is true for every built-in name', () => {
@@ -23,10 +33,10 @@ describe('isBuiltinParserName', () => {
     expect(isBuiltinParserName('parseAsUnknown')).toBe(false)
   })
 
-  test('is false for registered custom parsers', () => {
-    registerParser('parseAsCustomFlag', defineParser<string>({ parse: v => v, serialize: String }))
+  test('is false for a configured custom parser', () => {
+    installWagen({ parsers: { parseAsShout } })
 
-    expect(isBuiltinParserName('parseAsCustomFlag')).toBe(false)
+    expect(isBuiltinParserName('parseAsShout')).toBe(false)
   })
 })
 
@@ -40,77 +50,33 @@ describe('getParser', () => {
     expect(getParser('parseAsDate')!.parse('2024-01-01')).toBeInstanceOf(Date)
   })
 
-  test('returns registered custom parsers', () => {
-    const parseAsHex = defineParser<string>({
-      parse: v => (/^#[0-9a-f]{6}$/i.test(v) ? v : null),
-      serialize: v => v.toLowerCase(),
-    })
+  test('returns the parser configured on the active instance', () => {
+    installWagen({ parsers: { parseAsShout } })
 
-    registerParser('parseAsHex', parseAsHex)
-
-    expect(getParser('parseAsHex')).toBe(parseAsHex)
+    expect(getParser('parseAsShout')).toBe(parseAsShout)
   })
 
   test('returns undefined for unknown names', () => {
     expect(getParser('parseAsMissing')).toBeUndefined()
   })
 
-  test('the built-in wins when a custom name collides with a built-in (registration is ignored)', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    registerParser('parseAsInteger', defineParser<number>({ parse: () => 999, serialize: String }))
+  test('a built-in name cannot be shadowed by the config', () => {
+    const fake = defineParser<number>({ parse: () => 999, serialize: String })
+    installWagen({ parsers: { parseAsInteger: fake } })
 
     expect(getParser('parseAsInteger')!.parse('42')).toBe(42)
-
-    warn.mockRestore()
-  })
-})
-
-describe('registerParser', () => {
-  test('registers a custom parser under the given name', () => {
-    const parser = defineParser<string>({ parse: v => v, serialize: String })
-
-    registerParser('parseAsRegistered', parser)
-
-    expect(getParser('parseAsRegistered')).toBe(parser)
   })
 
-  test('overwrites a previously registered custom parser', () => {
-    const first = defineParser<string>({ parse: () => 'first', serialize: String })
-    const second = defineParser<string>({ parse: () => 'second', serialize: String })
+  test('names that shadow Object.prototype members do not leak through', () => {
+    installWagen()
 
-    registerParser('parseAsOverridable', first)
-    registerParser('parseAsOverridable', second)
-
-    expect(getParser('parseAsOverridable')!.parse('x')).toBe('second')
+    expect(getParser('toString')).toBeUndefined()
   })
 
-  test('warns and does not override a built-in parser', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  test('a name configured as an own property still resolves', () => {
+    installWagen({ parsers: { toString: parseAsShout } })
 
-    const custom = defineParser<string>({
-      parse: v => v.toUpperCase(),
-      serialize: v => v.toLowerCase(),
-    })
-
-    registerParser('parseAsString', custom)
-
-    expect(getParser('parseAsString')).toBe(parseAsString)
-    expect(warn).toHaveBeenCalledOnce()
-    expect(warn).toHaveBeenCalledWith(
-      getMessage(ErrorCodes.BUILTIN_PARSER_OVERRIDE),
-      'parseAsString',
-    )
-
-    warn.mockRestore()
-  })
-
-  test('accepts names that shadow Object.prototype members', () => {
-    const custom = defineParser<string>({ parse: v => `<${v}>`, serialize: String })
-
-    registerParser('toString', custom)
-
-    expect(getParser('toString')!.parse('x')).toBe('<x>')
+    expect(getParser('toString')).toBe(parseAsShout)
   })
 })
 
@@ -119,7 +85,7 @@ describe('resolveParser', () => {
     const resolved = resolveParser()
 
     expect(resolved.parse('anything')).toBe('anything')
-    expect('defaultValue' in resolved).toBe(false)
+    expect(resolved.defaultValue).toBeUndefined()
   })
 
   test('resolves a direct Parser without a defaultValue', () => {
@@ -140,7 +106,7 @@ describe('resolveParser', () => {
     const resolved = resolveParser({ name: 'parseAsInteger' })
 
     expect(resolved.parse('42')).toBe(42)
-    expect('defaultValue' in resolved).toBe(false)
+    expect(resolved.defaultValue).toBeUndefined()
   })
 
   test('resolves a name-based ref with defaultValue', () => {
@@ -150,25 +116,71 @@ describe('resolveParser', () => {
     expect(resolved.defaultValue).toBe(3)
   })
 
-  test('resolves a name-based ref that points to a registered custom parser', () => {
-    registerParser(
-      'parseAsShout',
-      defineParser<string>({ parse: v => v.toUpperCase(), serialize: v => v.toLowerCase() }),
-    )
+  test('inherits the defaultValue carried by the named parser', () => {
+    installWagen({ parsers: { parseAsScore: parseAsInteger.withDefault(10) } })
 
+    expect(resolveParser({ name: 'parseAsScore' as any }).defaultValue).toBe(10)
+  })
+
+  test('an explicit defaultValue wins over the one on the named parser', () => {
+    installWagen({ parsers: { parseAsScore: parseAsInteger.withDefault(10) } })
+
+    expect(resolveParser({ name: 'parseAsScore' as any, defaultValue: 1 }).defaultValue).toBe(1)
+  })
+
+  test('preserves an explicit undefined defaultValue on a name ref', () => {
+    const resolved = resolveParser({ name: 'parseAsInteger', defaultValue: undefined })
+
+    expect('defaultValue' in resolved).toBe(true)
+    expect(resolved.defaultValue).toBeUndefined()
+  })
+
+  test('resolves a name-based ref against the configured parsers', () => {
+    installWagen({ parsers: { parseAsShout } })
+
+    expect(resolveParser({ name: 'parseAsShout' as any }).parse('hi')).toBe('HI')
+  })
+})
+
+describe('lazy name resolution', () => {
+  test('a name can be resolved before the instance that provides it exists', () => {
     const resolved = resolveParser({ name: 'parseAsShout' as any })
+
+    installWagen({ parsers: { parseAsShout } })
 
     expect(resolved.parse('hi')).toBe('HI')
   })
 
-  test('falls back to parseAsString for an unknown name', () => {
+  test('it follows the active instance instead of the one it first saw', () => {
+    const resolved = resolveParser({ name: 'parseAsShout' as any })
+    installWagen({ parsers: { parseAsShout } })
+
+    expect(resolved.parse('hi')).toBe('HI')
+
+    installWagen({
+      parsers: { parseAsShout: defineParser<string>({ parse: v => `<${v}>`, serialize: String }) },
+    })
+
+    expect(resolved.parse('hi')).toBe('<hi>')
+  })
+
+  test('falls back to parseAsString for an unknown name and warns once', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const resolved = resolveParser({ name: 'parseAsNonexistent' as any })
 
     expect(resolved.parse('anything')).toBe('anything')
-    expect('defaultValue' in resolved).toBe(false)
+    expect(resolved.parse('again')).toBe('again')
+    expect(resolved.serialize('x')).toBe('x')
+
+    expect(spy).toHaveBeenCalledOnce()
+    expect(spy).toHaveBeenCalledWith(
+      getMessage(ErrorCodes.UNKNOWN_PARSER_NAME),
+      'parseAsNonexistent',
+    )
   })
 
   test('applies defaultValue on top of the parseAsString fallback', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const resolved = resolveParser({
       name: 'parseAsNonexistent' as any,
       defaultValue: 'fallback',
@@ -178,10 +190,17 @@ describe('resolveParser', () => {
     expect(resolved.defaultValue).toBe('fallback')
   })
 
-  test('preserves an explicit undefined defaultValue on a name ref', () => {
-    const resolved = resolveParser({ name: 'parseAsInteger', defaultValue: undefined })
+  test('does not resolve the name until the parser is used', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect('defaultValue' in resolved).toBe(true)
-    expect(resolved.defaultValue).toBeUndefined()
+    resolveParser({ name: 'parseAsNonexistent' as any })
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  test('a direct Parser is never looked up by name', () => {
+    installWagen()
+
+    expect(resolveParser(parseAsString).parse('hi')).toBe('hi')
   })
 })
