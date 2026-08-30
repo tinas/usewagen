@@ -1,8 +1,20 @@
 {
   "name": "usewagen",
-  "version": "0.0.0",
-  "description": "Type-safe composables to sync Vue state with router and storage.",
-  "homepage": "https://github.com/tinas/usewagen#readme",
+  "version": "0.1.0",
+  "description": "Reactive state for URL and storage in Vue.",
+  "keywords": [
+    "composables",
+    "localstorage",
+    "query-params",
+    "search-params",
+    "sessionstorage",
+    "storage",
+    "type-safe",
+    "url-state",
+    "vue",
+    "vue-router"
+  ],
+  "homepage": "https://usewagen.dev",
   "bugs": {
     "url": "https://github.com/tinas/usewagen/issues"
   },
