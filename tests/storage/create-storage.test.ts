@@ -228,10 +228,57 @@ describe('createStorage', () => {
     expect(analytics.getItem('theme')).toBe('light')
   })
 
+  test('a listener without a key sees every change, with the key it touched', () => {
+    const storage = createMemoryStorage()
+    const seen: (string | null)[] = []
+    storage.subscribe(key => seen.push(key))
+
+    storage.setItem('theme', 'dark')
+    storage.setItem('lang', 'tr')
+    storage.removeItem('theme')
+
+    expect(seen).toEqual(['theme', 'lang', 'theme'])
+  })
+
+  test('a listener without a key reports the key without the prefix', () => {
+    const storage = createStorage('object', { ...objectAdapter(), prefix: 'app:' })
+    const seen: (string | null)[] = []
+    storage.subscribe(key => seen.push(key))
+
+    storage.setItem('theme', 'dark')
+    storage.clear()
+
+    expect(seen).toEqual(['theme', 'theme'])
+  })
+
+  test('a listener without a key can be unsubscribed', () => {
+    const storage = createMemoryStorage()
+    let calls = 0
+    const unsubscribe = storage.subscribe(() => calls++)
+
+    storage.setItem('theme', 'dark')
+    unsubscribe()
+    storage.setItem('theme', 'light')
+
+    expect(calls).toBe(1)
+  })
+
+  test('both forms of subscribe run for the same change', () => {
+    const storage = createMemoryStorage()
+    const seen: string[] = []
+    storage.subscribe('theme', () => seen.push('keyed'))
+    storage.subscribe(() => seen.push('all'))
+
+    storage.setItem('theme', 'dark')
+
+    expect(seen).toEqual(['keyed', 'all'])
+  })
+
   test('destroy detaches subscribers but leaves reads working', () => {
     const storage = createMemoryStorage()
     let calls = 0
     storage.subscribe('theme', () => calls++)
+    storage.subscribe(() => calls++)
 
     storage.destroy()
     storage.setItem('theme', 'dark')
