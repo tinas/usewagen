@@ -1,0 +1,96 @@
+/**
+ * Colors
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-c-brand-1: #42b883;
+  --vp-c-brand-2: #249252;
+  --vp-c-brand-3: #155f3e;
+  --vp-c-brand-soft: #69e8af50;
+
+  --vp-c-white-soft: #f9f9f9;
+
+  --vp-code-block-bg: rgba(125, 125, 125, 0.04);
+  --vp-code-copy-code-bg: rgba(125, 125, 125, 0.1);
+  --vp-code-copy-code-hover-bg: rgba(125, 125, 125, 0.2);
+
+  --vp-c-disabled-bg: rgba(125, 125, 125, 0.2);
+
+  --vp-custom-block-tip-bg: transparent;
+
+  --vp-custom-block-warning-bg: #d9a40605;
+  --vp-custom-block-warning-text: #d9a406;
+  --vp-custom-block-warning-border: #d9a40630;
+
+  --vp-custom-block-tip-bg: #42b88305;
+  --vp-custom-block-tip-text: #42b883;
+  --vp-custom-block-tip-border: #42b88330;
+
+  --vp-code-bg: #8e96aa24;
+  --vp-code-color: #476582;
+}
+
+.dark {
+  --vp-code-block-bg: var(--vp-c-bg-alt);
+  --vp-code-bg: #65758529;
+  --vp-code-color: #c9def1;
+}
+
+/**
+ * Component: Code
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-code-line-highlight-color: rgba(125, 125, 125, 0.2);
+}
+
+.dark {
+  --vp-code-line-highlight-color: rgba(0, 0, 0, 0.5);
+}
+
+/**
+ * Component: Button
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-button-brand-border: var(--vp-c-brand-soft);
+  --vp-button-brand-text: var(--vp-c-white-soft);
+  --vp-button-brand-bg: var(--vp-c-brand-1);
+  --vp-button-brand-hover-border: var(--vp-c-brand-soft);
+  --vp-button-brand-hover-text: var(--vp-button-brand-text);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-border: var(--vp-c-brand-soft);
+  --vp-button-brand-active-text: var(--vp-button-brand-text);
+  --vp-button-brand-active-bg: var(--vp-button-brand-bg);
+}
+
+.dark {
+  --vp-button-brand-bg: var(--vp-c-brand-2);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-1);
+}
+
+/**
+ * Component: Home
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #35495e -80%, #41b883);
+  --vp-home-hero-image-filter: blur(30px);
+}
+
+.dark {
+  --vp-home-hero-image-background-image: linear-gradient(-90deg, #41b88380 20%, #35495e80 40%);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
+}
