@@ -238,13 +238,13 @@ describe('useStorage', () => {
   test('stopping the scope unsubscribes from the storage', () => {
     let unsubscribes = 0
     const subscribe = storage.subscribe
-    storage.subscribe = (key, listener) => {
+    storage.subscribe = ((key: string, listener: () => void) => {
       const unsubscribe = subscribe(key, listener)
       return () => {
         unsubscribes++
         unsubscribe()
       }
-    }
+    }) as typeof storage.subscribe
 
     const scope = effectScope()
     scope.run(() => useStorage({ key: 'theme', storage }))
@@ -448,14 +448,14 @@ describe('useStorage reactive options', () => {
     let subscribes = 0
     let unsubscribes = 0
     const subscribe = storage.subscribe
-    storage.subscribe = (key, listener) => {
+    storage.subscribe = ((key: string, listener: () => void) => {
       subscribes++
       const unsubscribe = subscribe(key, listener)
       return () => {
         unsubscribes++
         unsubscribe()
       }
-    }
+    }) as typeof storage.subscribe
 
     const scope = effectScope()
     scope.run(() => {

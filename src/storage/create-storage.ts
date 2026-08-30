@@ -2,6 +2,10 @@ export type ErrorHandler = (error: unknown) => void
 
 export type Unsubscribe = () => void
 
+export type KeyListener = () => void
+
+export type StorageListener = (key: string | null) => void
+
 export interface StorageAdapter {
   getItem: (key: string) => string | null
   setItem: (key: string, value: string) => void
@@ -27,28 +31,33 @@ export interface StorageInstance {
   has: (key: string) => boolean
   keys: () => string[]
   clear: (options?: { except?: string[] }) => void
-  subscribe: (key: string, listener: () => void) => Unsubscribe
+  subscribe: {
+    (key: string, listener: KeyListener): Unsubscribe
+    (listener: StorageListener): Unsubscribe
+  }
   destroy: () => void
 }
+
+const ALL_KEYS = Symbol('all-keys')
 
 export function createStorage(name: string, options: StorageOptions): StorageInstance {
   const { prefix = '', crossTab = false, onError } = options
 
   const fullKey = (key: string) => prefix + key
   const isOwn = (key: string) => key.startsWith(prefix)
-  const listeners = new Map<string, Set<() => void>>()
+  const listeners = new Map<string | symbol, Set<StorageListener>>()
 
   function notify(key: string | null): void {
     if (key === null) {
       for (const set of listeners.values()) {
-        for (const listener of set) listener()
+        for (const listener of set) listener(null)
       }
       return
     }
 
-    const set = listeners.get(key)
-    if (!set) return
-    for (const listener of set) listener()
+    const own = key.slice(prefix.length)
+    for (const listener of listeners.get(key) ?? []) listener(own)
+    for (const listener of listeners.get(ALL_KEYS) ?? []) listener(own)
   }
 
   const stopSync = crossTab
@@ -123,19 +132,21 @@ export function createStorage(name: string, options: StorageOptions): StorageIns
         onError?.(error)
       }
     },
-    subscribe(key, listener) {
-      const target = fullKey(key)
+    subscribe(key: string | StorageListener, listener?: KeyListener) {
+      const target = typeof key === 'function' ? ALL_KEYS : fullKey(key)
+      const handler = typeof key === 'function' ? key : (listener as KeyListener)
+
       let set = listeners.get(target)
       if (!set) {
         set = new Set()
         listeners.set(target, set)
       }
-      set.add(listener)
+      set.add(handler)
 
       return () => {
         const current = listeners.get(target)
         if (!current) return
-        current.delete(listener)
+        current.delete(handler)
         if (current.size === 0) listeners.delete(target)
       }
     },

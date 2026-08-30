@@ -116,13 +116,16 @@ describe('cross-tab sync over the native storage event', () => {
     storage.setItem('lang', 'tr')
 
     const seen: string[] = []
+    const keys: (string | null)[] = []
     storage.subscribe('theme', () => seen.push('theme'))
     storage.subscribe('lang', () => seen.push('lang'))
+    storage.subscribe(key => keys.push(key))
 
     win.localStorage.clear()
     emit('storage', { key: null, storageArea: win.localStorage })
 
     expect(seen.sort()).toEqual(['lang', 'theme'])
+    expect(keys).toEqual([null])
   })
 
   test('another prefix and another area are ignored', () => {

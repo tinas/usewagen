@@ -1,8 +1,10 @@
 export type {
   ErrorHandler,
+  KeyListener,
   StorageAdapter,
   StorageConfig,
   StorageInstance,
+  StorageListener,
   StorageOptions,
   Unsubscribe,
 } from './create-storage'
