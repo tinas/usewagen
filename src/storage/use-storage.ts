@@ -1,6 +1,6 @@
 import type { ComputedRef, Ref } from 'vue'
-import type { ReactiveOptions } from '../options'
-import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
+import type { ReactiveOptions } from '../types'
+import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
 import type { Wagen } from '../wagen'
 import type { StorageState, StorageStateOptions } from './define-storage-state'
 
@@ -11,10 +11,10 @@ import { defineStorageState } from './define-storage-state'
 import { getActiveWagen } from '../wagen'
 
 export type UseStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<Omit<StorageStateOptions, 'parser'> & { parser?: P }, 'parser'>
+  ReactiveOptions<WithParser<StorageStateOptions, P>>
 
 export type UseLocalStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<Omit<StorageStateOptions, 'parser' | 'storage'> & { parser?: P }, 'parser'>
+  ReactiveOptions<WithParser<Omit<StorageStateOptions, 'storage'>, P>>
 
 export type UseSessionStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
   UseLocalStorageOptions<P>
@@ -23,11 +23,16 @@ function isStorageState(input: unknown): input is StorageState<any, any> {
   return typeof input === 'object' && input !== null && typeof (input as any).get === 'function'
 }
 
-function withResolvedStorage(options: StorageStateOptions, wagen: Wagen): StorageStateOptions {
+function withWagenDefaults(options: StorageStateOptions, wagen: Wagen): StorageStateOptions {
   const source = options.storage
-  if (source && typeof source !== 'string') return options
+  const storage =
+    source === undefined
+      ? wagen.storage.default
+      : typeof source === 'string'
+        ? wagen.storage[source]
+        : source
 
-  return { ...options, storage: source ? wagen.storage[source] : wagen.storage.default }
+  return { ...options, storage, mode: options.mode ?? wagen.storage.mode }
 }
 
 function useStorageState(
@@ -37,7 +42,7 @@ function useStorageState(
 
   const wagen = getActiveWagen()
   return computed(() =>
-    defineStorageState(withResolvedStorage(toValueDeep<StorageStateOptions>(input), wagen)),
+    defineStorageState(withWagenDefaults(toValueDeep<StorageStateOptions>(input), wagen)),
   )
 }
 

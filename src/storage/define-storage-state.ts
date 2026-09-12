@@ -1,4 +1,5 @@
-import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
+import type { StateMode } from '../types'
+import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
 import type { StorageInstance, Unsubscribe } from './create-storage'
 
 import { resolveParser } from '../parser/resolve'
@@ -12,6 +13,7 @@ export interface StorageStateOptions {
   storage?: StorageSource
   parser?: ParserInput
   clearOnDefault?: boolean
+  mode?: StateMode
 }
 
 export interface StorageState<T = string | null, W = T | null | undefined> {
@@ -23,8 +25,13 @@ export interface StorageState<T = string | null, W = T | null | undefined> {
   subscribe: (listener: () => void) => Unsubscribe
 }
 
+interface ResolvedTarget {
+  instance: StorageInstance
+  optimistic: boolean
+}
+
 export function defineStorageState<P extends ParserInput | undefined = undefined>(
-  options: Omit<StorageStateOptions, 'parser'> & { parser?: P },
+  options: WithParser<StorageStateOptions, P>,
 ): StorageState<InferInputValue<P>, InferInputWritable<P>>
 
 export function defineStorageState(options: StorageStateOptions): StorageState<any, any> {
@@ -33,26 +40,59 @@ export function defineStorageState(options: StorageStateOptions): StorageState<a
 
   const parser = resolveParser(options.parser)
 
-  function storage(): StorageInstance {
-    const source = options.storage
-    if (source && typeof source !== 'string') return source
+  let cache: { seen: string | null; raw: string | null } | null = null
 
-    const { storage } = getActiveWagen()
-    return source ? storage[source] : storage.default
+  function resolved(): ResolvedTarget {
+    const source = options.storage
+    const mode = options.mode
+
+    if (mode !== undefined && source !== undefined && typeof source !== 'string') {
+      return { instance: source, optimistic: mode === 'optimistic' }
+    }
+
+    const wagen = getActiveWagen()
+    const instance =
+      source === undefined
+        ? wagen.storage.default
+        : typeof source === 'string'
+          ? wagen.storage[source]
+          : source
+
+    return { instance, optimistic: (mode ?? wagen.storage.mode) === 'optimistic' }
+  }
+
+  function write(serialized: string | null): void {
+    const { instance, optimistic } = resolved()
+
+    if (optimistic) cache = { seen: instance.getItem(key), raw: serialized }
+
+    if (serialized === null) instance.removeItem(key)
+    else instance.setItem(key, serialized)
+
+    if (optimistic) cache = { seen: instance.getItem(key), raw: serialized }
   }
 
   return {
     key,
     get storage() {
-      return storage()
+      return resolved().instance
     },
-    get: () => parseValue(parser, storage().getItem(key)),
-    set: next => {
-      const serialized = serializeValue(parser, clearOnDefault, next)
-      if (serialized === null) storage().removeItem(key)
-      else storage().setItem(key, serialized)
+    get: () => {
+      const { instance, optimistic } = resolved()
+      const current = instance.getItem(key)
+
+      if (!optimistic) {
+        cache = null
+        return parseValue(parser, current)
+      }
+
+      if (cache && cache.seen === current) return parseValue(parser, cache.raw)
+
+      cache = { seen: current, raw: current }
+      return parseValue(parser, current)
     },
-    remove: () => storage().removeItem(key),
-    subscribe: listener => storage().subscribe(key, listener),
+    set: next => write(serializeValue(parser, clearOnDefault, next)),
+    remove: () => write(null),
+    subscribe: listener => resolved().instance.subscribe(key, listener),
   }
 }

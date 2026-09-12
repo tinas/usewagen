@@ -1,3 +1,7 @@
+export type { StateMode } from '../types'
+
+export { routeHashOptions, routeStateOptions } from './options'
+
 export type {
   HistoryMode,
   ResolvedRouteStateOptions,
@@ -5,7 +9,7 @@ export type {
   RouteStateSource,
 } from './types'
 
-export type { RouteHashOptions, UseRouteHashOptions } from './use-route-hash'
+export type { RouteHashConfig, RouteHashOptions, UseRouteHashOptions } from './use-route-hash'
 export { useRouteHash } from './use-route-hash'
 
 export type { UseRouteStateOptions } from './use-route-state'
