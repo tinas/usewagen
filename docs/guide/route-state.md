@@ -1,9 +1,8 @@
 # Route State
 
-Route state keeps a value in the URL. It is read from the current route on every access, so
-the address bar, the back button and a pasted link all agree with what your components
-render. A param that is missing reads as the parser default, if the parser has
-one, which is what `clearOnDefault` builds on.
+Route state keeps a value in the URL, so the address bar, the back button and a pasted link
+all agree with what your components render. A param that is missing reads as the parser
+default, if the parser has one, which is what `clearOnDefault` builds on.
 
 ```vue
 <script setup lang="ts">
@@ -22,9 +21,18 @@ Typing in the input writes to `?q=`. Clearing it leaves `?q=` behind, since an e
 is a value of its own, and setting the ref to `null` is what removes the param. Without a
 parser the value is a `Ref<string | null>`, which is what the URL gives you.
 
-A write is applied on the next tick rather than right away. Two route states written in the
-same tick navigate on their own, so the last one wins and the other write is lost. When
-several params change together, write them through `useRouteStates`.
+A write reads back right away, the way a `ref` does, while the navigation itself is applied
+on the next tick. Every write made in the same tick is collected and applied in a single
+navigation: separate route states, the hash, and the `useRouteStates` batch API alike.
+
+```ts
+page.value = 2
+tab.value = 'open'
+// one navigation, /?page=2&tab=open
+```
+
+If a navigation guard cancels that navigation, the refs go back to what the URL actually
+holds rather than keeping a value that was never applied. `mode` is what decides this.
 
 ## Options
 
@@ -77,6 +85,74 @@ pagination. `'push'` adds an entry, so the back button undoes the change.
 When the parser has a default and the value is equal to it, the param is removed instead of
 written out, since a missing param reads as that default anyway. It keeps defaults out of
 shared links. Turn it off and the value is written like any other.
+
+### mode
+
+- **Type** `'optimistic' | 'source'`
+- **Default** `'optimistic'`
+
+Whether the state keeps a copy of what you wrote.
+
+With `'optimistic'` a write is visible on the next read, before the navigation that carries
+it to the URL has run. The copy is held until the navigation settles: once it lands the URL
+and the copy agree, and if a guard cancels it the URL wins and the ref goes back.
+
+With `'source'` every read goes to the current route, so a write is only visible after the
+navigation. This is the plain pass-through, and it is what you want when nothing may ever
+show a value the URL does not have.
+
+Either way an external navigation wins over the copy, whether it is the back button or a
+`router.push` from somewhere else, so a ref can never be left behind.
+
+## Sharing a definition
+
+`routeStateOptions` returns the options you give it, typed. It is there so a definition can
+live next to the code that owns it and be used from more than one component, with the parser
+and the key carried through.
+
+```ts [filters.ts]
+import { parseAsInteger, parseAsString } from 'usewagen'
+import { routeStateOptions } from 'usewagen/router'
+
+export const pageOptions = routeStateOptions({
+  key: 'page',
+  parser: parseAsInteger.withDefault(1),
+})
+
+export const tabOptions = routeStateOptions({ key: 'tab', parser: parseAsString })
+```
+
+```ts
+const page = useRouteState(pageOptions)
+const filters = useRouteStates([pageOptions, tabOptions])
+```
+
+`page` is a `Ref<number>` and `filters.tab` a `Ref<string | null>`, the same as if the
+options had been written inline.
+
+Wrap the options in a getter when they read state that changes, and pass the getter itself
+rather than calling it.
+
+```ts
+const pageOptions = routeStateOptions(() => ({
+  key: `${section.value}-page`,
+  parser: parseAsInteger.withDefault(1),
+}))
+```
+
+A function around it gives you a definition per argument, which is how the same state is
+reused for several sections.
+
+```ts
+function sectionOptions(section: string) {
+  return routeStateOptions({ key: `${section}-page`, parser: parseAsInteger.withDefault(1) })
+}
+
+const left = useRouteState(sectionOptions('left'))
+const right = useRouteState(sectionOptions('right'))
+```
+
+`routeHashOptions` does the same for `useRouteHash`.
 
 ## Several params together
 
@@ -133,7 +209,8 @@ hash.value = '#section'
 ```
 
 `useRouteHash` returns a `Ref<string | null>` and keeps the leading `#` in the value. It
-takes `parser`, `history` and `clearOnDefault`, with the same defaults as above.
+takes `parser`, `history`, `clearOnDefault` and `mode`, with the same defaults as above, and
+its writes join the same navigation as the params written beside them.
 
 ::: warning
 The router composables call `useRoute` and `useRouter`, so a router has to be installed on

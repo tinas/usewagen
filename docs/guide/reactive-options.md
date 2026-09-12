@@ -32,8 +32,8 @@ const draft = useStorage({
 })
 ```
 
-On the router side `urlKey`, `source`, `history` and `clearOnDefault` are reactive as well,
-and `set` and `reset` read them at the moment you call them.
+On the router side `urlKey`, `source`, `history`, `clearOnDefault` and `mode` are reactive as
+well, and `set` and `reset` read them at the moment you call them.
 
 ```ts
 const page = useRouteState({
@@ -43,9 +43,21 @@ const page = useRouteState({
 })
 ```
 
-Two options stay static.
+`parser` is reactive too, which is how a value whose type depends on something else is
+handled, such as a column filter that is a number for one column and a string for the next.
 
-`parser` decides the type of the ref, and a type cannot change while the app runs.
+```ts
+const value = useRouteState({
+  key: 'value',
+  parser: () => (column.value.numeric ? parseAsInteger : parseAsString),
+})
+```
 
-`key` in `useRouteStates` names the ref it returns, as in `filters.page`. It is an
-identifier in your source rather than data, so use `urlKey` for the part that varies.
+The ref is typed as the union of the parsers you can return, so the example above gives a
+`Ref<number | string | null>`. The value in the URL is left alone when the parser changes
+and is read again through the new one, exactly as it is when the key changes. A value the
+new parser cannot read falls back to that parser's default, or to `null` without one.
+
+One option stays static. `key` in `useRouteStates` names the ref it returns, as in
+`filters.page`. It is an identifier in your source rather than data, so use `urlKey` for the
+part that varies.

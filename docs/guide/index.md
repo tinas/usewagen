@@ -9,8 +9,9 @@ const theme = useLocalStorage({ key: 'theme' })
 ```
 
 `page` is a `Ref<number>` over `?page=` and `theme` a `Ref<string | null>` over the `theme`
-entry in `localStorage`. Reading one goes to the source it belongs to and writing it goes
-back there, with no copy of the value in between, and the parser decides the type.
+entry in `localStorage`. The parser decides the type. Writing one reads back at once, the way
+a `ref` does, while the source it belongs to keeps the last word: a value written in another
+tab, or a step back through the history, wins over what you wrote.
 
 What the composables take off your hands is the parsing, the defaults and the writing, for
 both sources and in the same shape.

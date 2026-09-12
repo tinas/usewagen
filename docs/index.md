@@ -5,7 +5,7 @@ layout: home
 hero:
   name: usewagen
   text: Reactive state for URL and storage
-  tagline: Type-safe, with the value in exactly one place.
+  tagline: Type-safe, with the source always in charge.
   image:
     src: /favicon.svg
     alt: usewagen
@@ -25,8 +25,8 @@ features:
     title: As simple as a ref
     details: Read it, write it, v-model it. The rest is handled.
   - icon: 🎯
-    title: One source of truth
-    details: The value stays in one place, with no copy to keep in sync.
+    title: Never out of step
+    details: A write reads back at once, and the source still has the last word.
   - icon: 🔄
     title: Reactive options
     details: The options are reactive too, not only the value.
