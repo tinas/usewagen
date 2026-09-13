@@ -7,7 +7,7 @@ export default defineConfig({
   pack: {
     entry: ['src/index.ts', 'src/router/index.ts', 'src/storage/index.ts', 'src/vite/index.ts'],
     dts: {
-      tsgo: true,
+      generator: 'tsgo',
     },
     exports: {
       customExports(exports: Record<string, unknown>) {

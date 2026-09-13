@@ -1,57 +1,83 @@
 # Parsers
 
-A parser is the pair of functions that turns a string into a value and back. It decides
-what the composable returns, so `parseAsInteger` gives you a `Ref<number | null>` and
-`parseAsBoolean` a `Ref<boolean | null>`.
-
-## Built-in parsers
-
-| Parser                 | Value                    | In the URL            |
-| ---------------------- | ------------------------ | --------------------- |
-| `parseAsString`        | `string`                 | `q=vue`               |
-| `parseAsInteger`       | `number`                 | `page=2`              |
-| `parseAsFloat`         | `number`                 | `ratio=1.5`           |
-| `parseAsIndex`         | `number`                 | `page=1` reads as `0` |
-| `parseAsBoolean`       | `boolean`                | `open=true`           |
-| `parseAsDate`          | `Date`                   | `day=2026-08-30`      |
-| `parseAsStringLiteral` | one of the given strings | `sort=asc`            |
-| `parseAsStringEnum`    | one of the given strings | `sort=asc`            |
-| `parseAsNumberLiteral` | one of the given numbers | `size=25`             |
-| `parseAsArrayOf`       | an array                 | `tags=vue,vite`       |
-| `parseAsJson`          | anything                 | `filter={"a":1}`      |
-
-`parseAsDate` reads a date-only string and writes one back. Use `parseAsDate.iso()` to keep
-the full ISO string, or `parseAsDate.timestamp()` to store milliseconds.
-
-`parseAsStringLiteral` takes the values as a readonly tuple and narrows to them.
-`parseAsStringEnum` is the same parser for a plain array of strings, which is what you have
-when the values come from an enum.
-
-`parseAsArrayOf` takes the parser for one item and, if you need it, a separator.
+A URL and a storage hold strings. A parser is the pair of functions that turns such a string
+into the value you want and back again, and it is what decides the type of every state you
+create.
 
 ```ts
-const tags = useRouteState({ key: 'tags', parser: parseAsArrayOf(parseAsString, ';') })
+const page = useRouteState({ key: 'page', parser: parseAsInteger })
 ```
 
-`parseAsJson` is typed by you, since JSON carries no type of its own.
+`page` is a `Ref<number | null>`. The parser reads `?page=2` as `2`, writes `2` back as
+`'2'`, and reads `?page=later` as `null`, because a string it cannot use is treated the same
+way as a param that was never there.
+
+## Choosing one
+
+Without a parser a state is a `Ref<string | null>`, which is what `parseAsString` gives
+you.
+
+Numbers come in three forms. `parseAsInteger` writes whole numbers, `parseAsFloat` keeps the
+decimals, and `parseAsIndex` shifts by one, for a list that is numbered from `1` in the URL
+and from `0` in your code.
+
+`parseAsBoolean` reads and writes `true` and `false`.
+
+Dates come in three forms as well, chosen by how the value should look in the URL.
+
+```ts
+parseAsDate // day=2026-08-30
+parseAsDate.iso() // day=2026-08-30T12:00:00.000Z
+parseAsDate.timestamp() // day=1788091200000
+```
+
+A value that may only be one of a few things is narrowed by listing them, which keeps a
+hand edited URL from putting an unknown sort order into your component.
+
+```ts
+const sort = useRouteState({
+  key: 'sort',
+  parser: parseAsStringLiteral(['asc', 'desc']).withDefault('asc'),
+})
+```
+
+`sort` is a `Ref<'asc' | 'desc'>`. `parseAsStringEnum` is the same parser for a plain array
+of strings, which is what you have when the values come from an enum.
+`parseAsNumberLiteral` does it for numbers.
+
+A list takes the parser of one item, and a separator when the default comma does not suit.
+
+```ts
+const tags = useRouteState({ key: 'tags', parser: parseAsArrayOf(parseAsString) })
+const sizes = useRouteState({ key: 'sizes', parser: parseAsArrayOf(parseAsInteger, ';') })
+```
+
+`?tags=vue,vite` reads as `['vue', 'vite']`. A separator inside a value is encoded on the way
+out, and an item the inner parser refuses is dropped rather than spoiling the whole list.
+
+Anything with a shape of its own goes through JSON, typed by you, since JSON carries no type.
 
 ```ts
 const filter = useRouteState({ key: 'filter', parser: parseAsJson<Filter>() })
 ```
 
+[Parsers](/api/parsers) lists every one of them with what it writes.
+
 ## Defaults
 
-`withDefault` makes the value non-nullable. The default is used when the param is missing
-and when the string cannot be parsed.
+`withDefault` says what a missing value means, which makes the ref non-nullable.
 
 ```ts
 const page = useRouteState({ key: 'page', parser: parseAsInteger.withDefault(1) })
 ```
 
-`page` is now a `Ref<number>`. With `clearOnDefault` left on, writing `1` removes the param
-instead of putting `?page=1` in the URL, which keeps the default out of shared links.
+`page` is a `Ref<number>`, and the default covers both the missing param and the one that
+cannot be parsed. It also changes what writing does: with `clearOnDefault` on, writing `1`
+removes the param instead of putting it in the URL, since the URL without it already means
+`1`.
 
-A default can also be a function, which is read again on every read.
+A default can be a function, which is read on every read, for a default that depends on
+something else.
 
 ```ts
 const size = useRouteState({
@@ -60,48 +86,46 @@ const size = useRouteState({
 })
 ```
 
-## Writing a parser
+## Writing your own
 
-`defineParser` takes a `parse` and an optional `serialize`. Returning `null` from `parse`
-means the string is not a valid value, and the default is used instead.
+`defineParser` takes a `parse` and, when `String` is not the right way back, a `serialize`.
+Returning `null` from `parse` is how a parser says the string is not a value it accepts.
 
 ```ts
 import { defineParser } from 'usewagen'
 
 export const parseAsSlug = defineParser<string>({
   parse: raw => (/^[a-z0-9-]+$/.test(raw) ? raw : null),
-  serialize: value => value,
 })
 ```
 
-`serialize` may be left out, in which case the value goes through `String`. The result is a
-parser like any other, `withDefault` included.
+What comes back is a parser like any other, `withDefault` included. A parser that builds on
+another can use `tryParse`, which runs a parse function and turns a thrown error into `null`,
+and `unwrapDefault`, which reads a default that may have been given as a function.
 
-Two helpers come along for parsers that build on others. `tryParse` runs a parse function
-and turns a thrown error into `null`, and `unwrapDefault` reads a default that may have been
-given as a factory.
+## Using a parser by name
 
-## Parsers by name
-
-A parser can also be referenced by name, which keeps the definition out of the component.
-Register your parsers when you create the instance.
+A parser can be passed by name instead of by value, which keeps the definition out of the
+component and the same definition in one place.
 
 ```ts
 import { createWagen } from 'usewagen'
 import { parseAsSlug } from './parsers/slug'
 
-const wagen = createWagen({ parsers: { parseAsSlug } })
+createWagen({ parsers: { parseAsSlug } })
 ```
 
 ```ts
 const slug = useRouteState({ key: 'slug', parser: { name: 'parseAsSlug' } })
 ```
 
-A default can travel with the name.
+A default travels with the name where the state needs one.
 
 ```ts
 const sort = useRouteState({ key: 'sort', parser: { name: 'parseAsSort', defaultValue: 'asc' } })
 ```
 
-The Vite plugin can collect them for you, so a growing folder of parsers stays out of your
-setup code.
+TypeScript knows the built-in names. For your own there is the
+[Vite plugin](/guide/vite-plugin), which collects a folder of parsers into one module to
+register and declares their names, so a new parser file is usable by name without any setup.
+A name nothing is registered under warns and falls back to `parseAsString`.

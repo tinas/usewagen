@@ -94,3 +94,118 @@
     --vp-home-hero-image-filter: blur(72px);
   }
 }
+
+/**
+ * Component: Demo
+ * -------------------------------------------------------------------------- */
+
+.demo {
+  margin: 20px 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background-color: var(--vp-c-bg-soft);
+  border-bottom: 1px solid var(--vp-c-divider);
+  font-size: 12px;
+}
+
+.demo-bar-label {
+  color: var(--vp-c-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.demo-bar-value {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-radius: 4px;
+  color: var(--vp-c-brand-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+}
+
+.demo-bar-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.demo-bar-actions button {
+  color: var(--vp-c-text-2);
+  font-size: 12px;
+  transition: color 0.2s;
+}
+
+.demo-bar-actions button:hover:not(:disabled) {
+  color: var(--vp-c-brand-1);
+}
+
+.demo-bar-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.demo-preview {
+  padding: 20px 16px;
+  font-size: 14px;
+}
+
+.demo-preview button {
+  padding: 5px 12px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  background-color: var(--vp-c-bg);
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.demo-preview button:hover:not(:disabled) {
+  border-color: var(--vp-c-brand-1);
+}
+
+.demo-preview button:disabled {
+  opacity: 0.5;
+}
+
+.demo-preview input,
+.demo-preview select,
+.demo-preview textarea {
+  padding: 5px 10px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  background-color: var(--vp-c-bg);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.demo-preview input:focus,
+.demo-preview select:focus,
+.demo-preview textarea:focus {
+  outline: none;
+  border-color: var(--vp-c-brand-1);
+}
+
+.demo-preview label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vp-c-text-2);
+}
+
+.demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
