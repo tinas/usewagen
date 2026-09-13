@@ -8,6 +8,7 @@ const DEFAULTS: ResolvedWagenRouterOptions = {
   history: 'replace',
   source: 'query',
   clearOnDefault: true,
+  mode: 'optimistic',
 }
 
 describe('toResolvedOptions', () => {
@@ -19,17 +20,19 @@ describe('toResolvedOptions', () => {
     expect(resolved.source).toBe('query')
     expect(resolved.history).toBe('replace')
     expect(resolved.clearOnDefault).toBe(true)
+    expect(resolved.mode).toBe('optimistic')
   })
 
   test('takes every default from the instance, not from hardcoded values', () => {
     const resolved = toResolvedOptions(
       { key: 'q' },
-      { history: 'push', source: 'params', clearOnDefault: false },
+      { history: 'push', source: 'params', clearOnDefault: false, mode: 'source' },
     )
 
     expect(resolved.source).toBe('params')
     expect(resolved.history).toBe('push')
     expect(resolved.clearOnDefault).toBe(false)
+    expect(resolved.mode).toBe('source')
   })
 
   test('preserves explicit values over the defaults', () => {

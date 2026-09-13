@@ -1,3 +1,4 @@
+import type { StateMode } from '../types'
 import type { ParserInput } from '../parser/types'
 import type { ResolvedParser } from '../parser/resolve'
 
@@ -12,6 +13,7 @@ export interface RouteStateOptions {
   source?: RouteStateSource
   history?: HistoryMode
   clearOnDefault?: boolean
+  mode?: StateMode
 }
 
 export type ResolvedRouteStateOptions = Omit<Required<RouteStateOptions>, 'parser'> & {

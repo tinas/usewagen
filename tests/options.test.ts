@@ -1,4 +1,4 @@
-import type { ReactiveFields, ReactiveOptions } from '../src/options'
+import type { ReactiveFields, ReactiveOptions } from '../src/types'
 
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
 import { computed, ref, shallowRef } from 'vue'

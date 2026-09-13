@@ -1,20 +1,21 @@
 import type { ComputedRef, Ref } from 'vue'
-import type { ReactiveFields } from '../options'
-import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
+import type { ReactiveFields } from '../types'
+import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
 import type { HistoryMode, ResolvedRouteStateOptions, RouteStateOptions } from './types'
-import type { RouteChange } from './use-base-route-state'
+import type { RouteStateHandle } from './use-base-route-state'
 
-import { computed, getCurrentScope, nextTick } from 'vue'
+import { computed, getCurrentScope } from 'vue'
 import { ErrorCodes, warnDev } from '../messages'
 import { toValueDeep } from '../options'
 import { unwrapDefault } from '../parser'
 import { getActiveWagen } from '../wagen'
 import { serializeValue } from '../parser/utils'
+import { resolveBatchHistory } from './queue'
 import { useBaseRouteState } from './use-base-route-state'
 import { toResolvedOptions } from './utils'
 
 export type RouteStateConfig<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveFields<Omit<RouteStateOptions, 'parser'> & { parser?: P }, 'key' | 'parser'>
+  ReactiveFields<WithParser<RouteStateOptions, P>, 'key'>
 
 export interface BatchOptions {
   history?: HistoryMode
@@ -44,73 +45,69 @@ export interface UseRouteStatesApi<TOptions extends readonly RouteStateConfig[]>
 export type UseRouteStatesReturn<TOptions extends readonly RouteStateConfig[]> = Refs<TOptions> &
   UseRouteStatesApi<TOptions>
 
-function resolveBatchHistory(
-  candidates: readonly HistoryMode[],
-  override: HistoryMode | undefined,
-): HistoryMode {
-  if (override) return override
-  return candidates.includes('push') ? 'push' : 'replace'
-}
-
 export function useRouteStates<const TOptions extends readonly RouteStateConfig[]>(
   configs: TOptions,
 ): UseRouteStatesReturn<TOptions> {
   if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useRouteStates')
 
-  const { createRouteStateRef, navigate } = useBaseRouteState()
+  const { createRouteStateRef } = useBaseRouteState()
   const defaults = getActiveWagen().router
 
   const resolvedList: ComputedRef<ResolvedRouteStateOptions>[] = configs.map(config =>
     computed(() => toResolvedOptions(toValueDeep<RouteStateOptions>(config), defaults)),
   )
 
+  const handles: RouteStateHandle[] = resolvedList.map(resolved => createRouteStateRef(resolved))
+
   const refs = Object.fromEntries(
-    resolvedList.map(resolved => [resolved.value.key, createRouteStateRef(resolved)]),
+    resolvedList.map((resolved, index) => [resolved.value.key, handles[index].state]),
   ) as Refs<TOptions>
+
+  function commit(
+    writes: { handle: RouteStateHandle; serialized: string | null }[],
+    candidates: HistoryMode[],
+    override: HistoryMode | undefined,
+  ): void {
+    if (writes.length === 0) return
+
+    const history = resolveBatchHistory(candidates, override)
+    for (const { handle, serialized } of writes) void handle.write(serialized, history)
+  }
 
   const api: UseRouteStatesApi<TOptions> = {
     set(patch, options) {
-      const changes: RouteChange[] = []
-      const historyCandidates: HistoryMode[] = []
+      const writes: { handle: RouteStateHandle; serialized: string | null }[] = []
+      const candidates: HistoryMode[] = []
 
-      for (const resolved of resolvedList) {
-        const { key, urlKey, source, parser, clearOnDefault, history } = resolved.value
-        if (!(key in patch)) continue
+      resolvedList.forEach((resolved, index) => {
+        const { key, parser, clearOnDefault, history } = resolved.value
+        if (!(key in patch)) return
 
         const next = (patch as Record<string, unknown>)[key]
-        changes.push({
-          urlKey,
-          source,
+        writes.push({
+          handle: handles[index],
           serialized: serializeValue(parser, clearOnDefault, next),
         })
-        historyCandidates.push(history)
-      }
-
-      if (changes.length === 0) return
-      const history = resolveBatchHistory(historyCandidates, options?.history)
-      void nextTick(() => {
-        navigate(changes, history)
+        candidates.push(history)
       })
+
+      commit(writes, candidates, options?.history)
     },
     reset(options) {
-      const changes: RouteChange[] = []
-      const historyCandidates: HistoryMode[] = []
+      const writes: { handle: RouteStateHandle; serialized: string | null }[] = []
+      const candidates: HistoryMode[] = []
 
-      for (const resolved of resolvedList) {
-        const { urlKey, source, parser, clearOnDefault, history } = resolved.value
+      resolvedList.forEach((resolved, index) => {
+        const { parser, clearOnDefault, history } = resolved.value
         const next = parser.defaultValue !== undefined ? unwrapDefault(parser.defaultValue) : null
-        changes.push({
-          urlKey,
-          source,
+        writes.push({
+          handle: handles[index],
           serialized: serializeValue(parser, clearOnDefault, next),
         })
-        historyCandidates.push(history)
-      }
-
-      const history = resolveBatchHistory(historyCandidates, options?.history)
-      void nextTick(() => {
-        navigate(changes, history)
+        candidates.push(history)
       })
+
+      commit(writes, candidates, options?.history)
     },
     toObject() {
       const snapshot: Record<string, unknown> = {}

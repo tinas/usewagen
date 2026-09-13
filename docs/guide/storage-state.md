@@ -1,7 +1,8 @@
 # Storage State
 
-Storage state keeps a value in `localStorage` or `sessionStorage`. Reads go to the storage
-itself, so there is no cached copy that can drift, and writes are applied immediately.
+Storage state keeps a value in `localStorage` or `sessionStorage`. A write is applied right
+away, and a read gives back what the storage holds, unless the write never landed. That last
+case is what `mode` is about.
 
 ```ts
 import { parseAsJson } from 'usewagen'
@@ -60,6 +61,32 @@ When the parser has a default and the value is equal to it, the entry is removed
 written out, since a missing entry reads as that default anyway. Turn it off and the value
 is written like any other.
 
+### mode
+
+- **Type** `'optimistic' | 'source'`
+- **Default** `'optimistic'`
+
+Whether the state keeps a copy of what you wrote.
+
+A browser can refuse a write when the quota is full, or when storage is disabled for the
+origin.
+With `'optimistic'` the ref still reads back the value you assigned, so it behaves like a
+`ref` that happens to persist, and `onError` is where you learn the write did not land.
+
+```ts
+const theme = useLocalStorage({ key: 'theme' })
+
+theme.value = 'dark'
+theme.value // 'dark', even if the quota refused it
+```
+
+With `'source'` every read goes to the storage, so a refused write leaves the ref on the
+value that is actually stored. Use it when showing a value that is not really there would be
+worse than showing a stale one.
+
+Either way a later write from anywhere else wins over the copy, whether it comes from another
+tab, another ref, or the storage instance directly, so a ref can never be left behind.
+
 ## Other tabs
 
 Local storage instances listen to the native `storage` event, so a value written in one tab
@@ -83,6 +110,8 @@ themeState.remove()
 ```
 
 It takes the same options as `useStorage`, with plain values instead of refs and getters.
+The copy that `mode` describes lives on the state, so every ref built over one state agrees
+with it and with the others.
 
 ### get and set
 

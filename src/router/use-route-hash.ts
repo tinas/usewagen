@@ -1,31 +1,36 @@
 import type { Ref } from 'vue'
-import type { ReactiveOptions } from '../options'
-import type { InferInputValue, InferInputWritable, ParserInput } from '../parser/types'
+import type { ReactiveFields, ReactiveOptions, StateMode } from '../types'
+import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
 import type { ResolvedParser } from '../parser/resolve'
 import type { ResolvedWagenRouterOptions } from '../wagen'
 import type { HistoryMode } from './types'
 
-import { computed, customRef, getCurrentScope, nextTick } from 'vue'
+import { computed, customRef, getCurrentScope } from 'vue'
 import { ErrorCodes, warnDev } from '../messages'
 import { useRoute, useRouter } from 'vue-router'
 import { toValueDeep } from '../options'
 import { resolveParser } from '../parser/resolve'
 import { parseValue, serializeValue } from '../parser/utils'
 import { getActiveWagen } from '../wagen'
+import { enqueue } from './queue'
 
 export interface RouteHashOptions {
   parser?: ParserInput
   history?: HistoryMode
   clearOnDefault?: boolean
+  mode?: StateMode
 }
 
 export type UseRouteHashOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<Omit<RouteHashOptions, 'parser'> & { parser?: P }, 'parser'>
+  ReactiveOptions<WithParser<RouteHashOptions, P>>
+
+export type RouteHashConfig = ReactiveFields<RouteHashOptions>
 
 interface ResolvedRouteHashOptions {
   parser: ResolvedParser<any>
   history: HistoryMode
   clearOnDefault: boolean
+  mode: StateMode
 }
 
 function toResolvedHashOptions(
@@ -36,6 +41,7 @@ function toResolvedHashOptions(
     parser: resolveParser(options.parser),
     history: options.history ?? defaults.history,
     clearOnDefault: options.clearOnDefault ?? defaults.clearOnDefault,
+    mode: options.mode ?? defaults.mode,
   }
 }
 
@@ -54,25 +60,50 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
     toResolvedHashOptions(toValueDeep<RouteHashOptions>(options), defaults),
   )
 
-  return customRef(track => ({
-    get: () => {
-      track()
-      const raw = route.hash === '' ? undefined : route.hash
-      return parseValue(resolvedOptions.value.parser, raw)
-    },
-    set: next => {
-      const { parser, history, clearOnDefault } = resolvedOptions.value
-      const serialized = serializeValue(parser, clearOnDefault, next)
-      void nextTick(() => {
-        const current = route.hash === '' ? null : route.hash
-        if (current === serialized) return
+  let cache: { seen: string | null; raw: string | null } | null = null
+  let generation = 0
+  let trigger!: () => void
 
-        void router[history]({
-          query: route.query,
-          params: route.params,
-          hash: serialized === null ? undefined : serialized,
+  function currentHash(): string | null {
+    return route.hash === '' ? null : route.hash
+  }
+
+  return customRef((track, triggerRef) => {
+    trigger = triggerRef
+
+    return {
+      get: () => {
+        track()
+        const { parser, mode } = resolvedOptions.value
+        const current = currentHash()
+
+        if (mode === 'source') {
+          cache = null
+          return parseValue(parser, current)
+        }
+
+        if (cache && cache.seen === current) return parseValue(parser, cache.raw)
+
+        cache = { seen: current, raw: current }
+        return parseValue(parser, current)
+      },
+      set: next => {
+        const { parser, clearOnDefault, history, mode } = resolvedOptions.value
+        const serialized = serializeValue(parser, clearOnDefault, next)
+        const optimistic = mode === 'optimistic'
+        const own = ++generation
+
+        if (optimistic) {
+          cache = { seen: currentHash(), raw: serialized }
+          trigger()
+        }
+
+        void enqueue(router, { history, hash: serialized }).then(() => {
+          if (!optimistic || generation !== own) return
+          cache = null
+          trigger()
         })
-      })
-    },
-  }))
+      },
+    }
+  })
 }

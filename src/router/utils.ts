@@ -14,5 +14,6 @@ export function toResolvedOptions(
     source: input.source ?? defaults.source,
     history: input.history ?? defaults.history,
     clearOnDefault: input.clearOnDefault ?? defaults.clearOnDefault,
+    mode: input.mode ?? defaults.mode,
   }
 }

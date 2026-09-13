@@ -18,13 +18,23 @@ describe('createWagen', () => {
   test('fills in the router defaults', () => {
     const wagen = createMemoryWagen()
 
-    expect(wagen.router).toEqual({ history: 'replace', source: 'query', clearOnDefault: true })
+    expect(wagen.router).toEqual({
+      history: 'replace',
+      source: 'query',
+      clearOnDefault: true,
+      mode: 'optimistic',
+    })
   })
 
   test('explicit router options override the defaults one by one', () => {
     const wagen = createMemoryWagen({ router: { history: 'push' } })
 
-    expect(wagen.router).toEqual({ history: 'push', source: 'query', clearOnDefault: true })
+    expect(wagen.router).toEqual({
+      history: 'push',
+      source: 'query',
+      clearOnDefault: true,
+      mode: 'optimistic',
+    })
   })
 
   test('copies the parser table instead of holding the caller object', () => {

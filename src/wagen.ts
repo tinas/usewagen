@@ -1,4 +1,5 @@
 import type { App, InjectionKey } from 'vue'
+import type { StateMode } from './types'
 import type { Parser } from './parser/parsers'
 import type { HistoryMode, RouteStateSource } from './router/types'
 import type { ErrorHandler, StorageInstance } from './storage/create-storage'
@@ -14,12 +15,14 @@ export interface WagenStorageOptions {
   local?: StorageInstance
   session?: StorageInstance
   default?: 'local' | 'session'
+  mode?: StateMode
 }
 
 export interface WagenRouterOptions {
   history?: HistoryMode
   source?: RouteStateSource
   clearOnDefault?: boolean
+  mode?: StateMode
 }
 
 export type WagenParsers = Record<string, Parser<any>>
@@ -34,6 +37,7 @@ export interface WagenStorage {
   readonly local: StorageInstance
   readonly session: StorageInstance
   readonly default: StorageInstance
+  readonly mode: StateMode
 }
 
 export type ResolvedWagenRouterOptions = Required<WagenRouterOptions>
@@ -52,6 +56,7 @@ const ROUTER_DEFAULTS: ResolvedWagenRouterOptions = {
   history: 'replace',
   source: 'query',
   clearOnDefault: true,
+  mode: 'optimistic',
 }
 
 let activeWagen: Wagen | null = null
@@ -80,6 +85,7 @@ function createStorage(options: WagenStorageOptions) {
     get default() {
       return options.default === 'session' ? storage.session : storage.local
     },
+    mode: options.mode ?? 'optimistic',
   }
 
   function destroy() {

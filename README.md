@@ -1,6 +1,6 @@
 # usewagen
 
-Reactive state for URL and storage in Vue. Type-safe, with the value in exactly one place.
+Reactive state for URL and storage in Vue. Type-safe, with the source always in charge.
 
 Documentation lives at [usewagen.dev](https://usewagen.dev).
 

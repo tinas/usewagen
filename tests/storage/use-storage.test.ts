@@ -3,12 +3,27 @@ import type { StorageInstance } from '../../src/storage/create-storage'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from 'vite-plus/test'
 import { computed, effectScope, nextTick, ref, watch } from 'vue'
 
-import { parseAsInteger, parseAsJson } from '../../src/parser/parsers'
+import { parseAsInteger, parseAsJson, parseAsString } from '../../src/parser/parsers'
 import { createStorage } from '../../src/storage/create-storage'
 import { defineStorageState } from '../../src/storage/define-storage-state'
 import { createMemoryStorage } from '../../src/storage/presets'
 import { useLocalStorage, useStorage } from '../../src/storage/use-storage'
 import { installWagen, resetWagen } from '../__helpers__/wagen'
+
+function guardedStorage(backing: Record<string, string>, guard: { failing: boolean }) {
+  return createStorage('object', {
+    getItem: key => backing[key] ?? null,
+    setItem: (key, value) => {
+      if (guard.failing) throw new Error('QuotaExceededError')
+      backing[key] = value
+    },
+    removeItem: key => {
+      delete backing[key]
+    },
+    keys: () => Object.keys(backing),
+    onError: () => {},
+  })
+}
 
 let storage: StorageInstance
 
@@ -202,21 +217,10 @@ describe('useStorage', () => {
     expect(state.value).toBe(9)
   })
 
-  test('a failed write leaves the ref on the value that is actually stored', async () => {
+  test('a failed write keeps the ref on the value that was written', async () => {
     const backing: Record<string, string> = { count: '1' }
-    let failing = false
-    const guarded = createStorage('object', {
-      getItem: key => backing[key] ?? null,
-      setItem: (key, value) => {
-        if (failing) throw new Error('QuotaExceededError')
-        backing[key] = value
-      },
-      removeItem: key => {
-        delete backing[key]
-      },
-      keys: () => Object.keys(backing),
-      onError: () => {},
-    })
+    const guard = { failing: false }
+    const guarded = guardedStorage(backing, guard)
 
     const scope = effectScope()
     const seen: unknown[] = []
@@ -226,13 +230,87 @@ describe('useStorage', () => {
       watch(state, value => seen.push(value))
     })
 
-    failing = true
+    guard.failing = true
+    state.value = 2
+    await nextTick()
+
+    expect(state.value).toBe(2)
+    expect(backing.count).toBe('1')
+    expect(seen).toEqual([2])
+    scope.stop()
+  })
+
+  test('an external write still wins after a failed write', () => {
+    const backing: Record<string, string> = { count: '1' }
+    const guard = { failing: false }
+    const guarded = guardedStorage(backing, guard)
+
+    const state = useStorage({ key: 'count', storage: guarded, parser: parseAsInteger })
+
+    guard.failing = true
+    state.value = 2
+    expect(state.value).toBe(2)
+
+    guard.failing = false
+    guarded.setItem('count', '9')
+    expect(state.value).toBe(9)
+  })
+
+  test('mode: source leaves the ref on the value that is actually stored', async () => {
+    const backing: Record<string, string> = { count: '1' }
+    const guard = { failing: false }
+    const guarded = guardedStorage(backing, guard)
+
+    const scope = effectScope()
+    const seen: unknown[] = []
+    let state!: ReturnType<typeof useStorage>
+    scope.run(() => {
+      state = useStorage({
+        key: 'count',
+        storage: guarded,
+        parser: parseAsInteger,
+        mode: 'source',
+      })
+      watch(state, value => seen.push(value))
+    })
+
+    guard.failing = true
     state.value = 2
     await nextTick()
 
     expect(state.value).toBe(1)
     expect(seen).toEqual([])
     scope.stop()
+  })
+
+  test('the configured mode applies when a call does not name one', () => {
+    const backing: Record<string, string> = { count: '1' }
+    const guard = { failing: false }
+    const guarded = guardedStorage(backing, guard)
+    const { run } = installWagen({ storage: { local: guarded, mode: 'source' } })
+
+    run(() => {
+      const state = useLocalStorage({ key: 'count', parser: parseAsInteger })
+
+      guard.failing = true
+      state.value = 2
+      expect(state.value).toBe(1)
+    })
+  })
+
+  test('a call overrides the configured mode', () => {
+    const backing: Record<string, string> = { count: '1' }
+    const guard = { failing: false }
+    const guarded = guardedStorage(backing, guard)
+    const { run } = installWagen({ storage: { local: guarded, mode: 'source' } })
+
+    run(() => {
+      const state = useLocalStorage({ key: 'count', parser: parseAsInteger, mode: 'optimistic' })
+
+      guard.failing = true
+      state.value = 2
+      expect(state.value).toBe(2)
+    })
   })
 
   test('stopping the scope unsubscribes from the storage', () => {
@@ -508,6 +586,44 @@ describe('useStorage reactive options', () => {
       guest.value = true
       expect(state.value).toBe('from-session')
     })
+  })
+
+  test('the parser can be reactive', () => {
+    storage.setItem('value', '42')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const numeric = ref(true)
+      const state = useStorage({
+        key: 'value',
+        storage,
+        parser: () => (numeric.value ? parseAsInteger : parseAsString),
+      })
+
+      expect(state.value).toBe(42)
+      numeric.value = false
+      expect(state.value).toBe('42')
+    })
+    scope.stop()
+  })
+
+  test('a stored value the new parser rejects falls back to its default', () => {
+    storage.setItem('value', 'abc')
+
+    const scope = effectScope()
+    scope.run(() => {
+      const numeric = ref(false)
+      const state = useStorage({
+        key: 'value',
+        storage,
+        parser: () => (numeric.value ? parseAsInteger.withDefault(0) : parseAsString),
+      })
+
+      expect(state.value).toBe('abc')
+      numeric.value = true
+      expect(state.value).toBe(0)
+    })
+    scope.stop()
   })
 
   test('clearOnDefault can be reactive', () => {

@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
 
 export type BuiltinParsers = {
@@ -24,7 +25,15 @@ type NamedParserRef = {
 
 export type ParserInput = (Parser<any> & { name?: never }) | NamedParserRef
 
-export type InferInputValue<P> = [P] extends [undefined]
+export type UnwrapParser<P> = P extends Ref<infer U> ? U : P extends () => infer U ? U : P
+
+export type WithParser<T, P extends ParserInput | undefined> = Omit<T, 'parser'> & {
+  parser?: P
+}
+
+export type InferInputValue<P> = ResolveInputValue<UnwrapParser<P>>
+
+type ResolveInputValue<P> = [P] extends [undefined]
   ? string | null
   : P extends ParserWithDefault<infer T>
     ? T

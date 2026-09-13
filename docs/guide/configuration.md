@@ -49,6 +49,14 @@ through the `storage` event. Session storage is per tab, so this does nothing th
 
 The storage `useStorage` picks when a call does not name one.
 
+### mode
+
+- **Type** `'optimistic' | 'source'`
+- **Default** `'optimistic'`
+
+Whether storage state keeps a copy of what was written, for every call that does not set its
+own. See [mode](/guide/storage-state#mode).
+
 ### onError
 
 - **Type** `(error: unknown) => void`
@@ -94,6 +102,14 @@ Where route state is read from by default.
 - **Default** `true`
 
 Whether a value equal to the parser default is removed instead of written.
+
+### mode
+
+- **Type** `'optimistic' | 'source'`
+- **Default** `'optimistic'`
+
+Whether route state keeps a copy of what was written, for every call that does not set its
+own. See [mode](/guide/route-state#mode).
 
 ## Reading the instance
 

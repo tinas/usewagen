@@ -1,5 +1,7 @@
 export * from './parser'
 
+export type { StateMode } from './types'
+
 export type {
   ResolvedWagenRouterOptions,
   Wagen,

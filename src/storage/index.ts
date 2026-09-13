@@ -1,3 +1,5 @@
+export type { StateMode } from '../types'
+
 export type {
   ErrorHandler,
   KeyListener,
