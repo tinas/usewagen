@@ -1,5 +1,8 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitepress'
 import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons'
+
+const src = (path: string) => fileURLToPath(new URL(`../../src/${path}`, import.meta.url))
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
@@ -13,6 +16,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Guide', link: '/guide/', activeMatch: '/guide/' },
+      { text: 'API', link: '/api/', activeMatch: '/api/' },
       { text: 'Examples', link: '/examples/', activeMatch: '/examples/' },
     ],
 
@@ -23,6 +27,7 @@ export default defineConfig({
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'How It Works', link: '/guide/how-it-works' },
           ],
         },
         {
@@ -49,7 +54,47 @@ export default defineConfig({
         },
       ],
 
-      '/examples/': [],
+      '/api/': [
+        {
+          text: 'API Reference',
+          items: [{ text: 'Overview', link: '/api/' }],
+        },
+        {
+          text: 'usewagen',
+          items: [
+            { text: 'Instance', link: '/api/wagen' },
+            { text: 'Parsers', link: '/api/parsers' },
+          ],
+        },
+        {
+          text: 'usewagen/router',
+          items: [{ text: 'Router', link: '/api/router' }],
+        },
+        {
+          text: 'usewagen/storage',
+          items: [
+            { text: 'Storage', link: '/api/storage' },
+            { text: 'Storage Instances', link: '/api/storage-instances' },
+          ],
+        },
+        {
+          text: 'usewagen/vite',
+          items: [{ text: 'Vite Plugin', link: '/api/vite' }],
+        },
+      ],
+
+      '/examples/': [
+        {
+          text: 'Examples',
+          items: [
+            { text: 'Pagination', link: '/examples/' },
+            { text: 'Filters', link: '/examples/filters' },
+            { text: 'Tabs', link: '/examples/tabs' },
+            { text: 'Preferences', link: '/examples/preferences' },
+            { text: 'Form draft', link: '/examples/form-draft' },
+          ],
+        },
+      ],
     },
 
     socialLinks: [{ icon: 'github', link: 'https://github.com/tinas/usewagen' }],
@@ -89,5 +134,13 @@ export default defineConfig({
   },
   vite: {
     plugins: [groupIconVitePlugin()],
+    resolve: {
+      dedupe: ['vue', 'vue-router'],
+      alias: {
+        'usewagen/router': src('router/index.ts'),
+        'usewagen/storage': src('storage/index.ts'),
+        'usewagen': src('index.ts'),
+      },
+    },
   },
 })
