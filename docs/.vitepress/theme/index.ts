@@ -1,18 +1,16 @@
 // https://vitepress.dev/guide/custom-theme
-import { h } from 'vue'
 import type { Theme } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import 'virtual:group-icons.css'
 import './style.css'
 
+import RouteDemo from '../components/RouteDemo.vue'
+import StorageDemo from '../components/StorageDemo.vue'
+
 export default {
   extends: DefaultTheme,
-  Layout: () => {
-    return h(DefaultTheme.Layout, null, {
-      // https://vitepress.dev/guide/extending-default-theme#layout-slots
-    })
-  },
-  enhanceApp() {
-    // ...
+  enhanceApp({ app }) {
+    app.component('RouteDemo', RouteDemo)
+    app.component('StorageDemo', StorageDemo)
   },
 } satisfies Theme

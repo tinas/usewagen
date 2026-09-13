@@ -1,39 +1,33 @@
 # Reactive Options
 
-Every option accepts a plain value, a `ref`, a `computed` or a getter, and the options
-object itself can be any of those too. This is what makes these composables rather than
-plain functions, since a piece of state can point at something that is only known while the
-app runs.
+Nothing in an options object has to be known when the component is written. Every option
+takes a plain value, a `ref`, a `computed` or a getter, and the options object itself can be
+any of those, which is what makes these composables rather than plain functions.
 
 ```ts
-const key = ref('theme')
-
 useLocalStorage({ key: 'theme' })
-useLocalStorage({ key })
-useLocalStorage({ key: computed(() => `config:${user.value.id}`) })
-useLocalStorage({ key: () => `config:${user.value.id}` })
-useLocalStorage(reactive({ key: 'theme' }))
-useLocalStorage(() => ({ key: `config:${user.value.id}` }))
-useLocalStorage(computed(() => ({ key: `config:${user.value.id}` })))
+useLocalStorage({ key: () => `theme:${user.value.id}` })
+useLocalStorage(() => ({ key: `theme:${user.value.id}` }))
 ```
 
-The type behind this is `MaybeRefOrGetter`, the same one `toValue` takes, so anything you
-would hand to a Vue utility works here as well.
+The type behind this is `MaybeRefOrGetter`, the one `toValue` takes, so whatever you would
+hand to a Vue utility works here as well.
 
-When the key changes, the ref reads the new entry and its subscription moves with it. The
-old entry is left as it is, so nothing is copied or migrated.
+## A key that follows the app
 
-The storage target is reactive in the same way.
+A per user setting, a tenant taken from the route, a document being edited: the key is as
+much data as the value is.
 
 ```ts
-const draft = useStorage({
-  key: 'draft',
-  storage: () => (isGuest.value ? 'session' : 'local'),
-})
+const settings = useLocalStorage({ key: () => `settings:${user.value.id}` })
 ```
 
-On the router side `urlKey`, `source`, `history`, `clearOnDefault` and `mode` are reactive as
-well, and `set` and `reset` read them at the moment you call them.
+When the key changes, the ref reads the entry under the new key and its subscription moves
+along with it. The entry under the old key stays where it is, untouched, so what one user
+left behind is still there when they come back.
+
+In the URL the name of the param is `urlKey`, and `key` stays the name of the state in your
+code.
 
 ```ts
 const page = useRouteState({
@@ -43,8 +37,25 @@ const page = useRouteState({
 })
 ```
 
-`parser` is reactive too, which is how a value whose type depends on something else is
-handled, such as a column filter that is a number for one column and a string for the next.
+## A target that follows the app
+
+Where a value is kept can be decided while the app runs, the same way.
+
+```ts
+const draft = useStorage({
+  key: 'draft',
+  storage: () => (isGuest.value ? 'session' : 'local'),
+})
+```
+
+The router options work like this too, so `source`, `history`, `clearOnDefault` and `mode`
+can all depend on where the user is or what they are doing. `set` and `reset` on a group read
+them at the moment you call them, not when the group was created.
+
+## A parser that follows the app
+
+A value whose type depends on something else needs a parser that depends on the same thing.
+A filter over a column is the usual case: a number for one column, a string for the next.
 
 ```ts
 const value = useRouteState({
@@ -53,11 +64,18 @@ const value = useRouteState({
 })
 ```
 
-The ref is typed as the union of the parsers you can return, so the example above gives a
-`Ref<number | string | null>`. The value in the URL is left alone when the parser changes
-and is read again through the new one, exactly as it is when the key changes. A value the
-new parser cannot read falls back to that parser's default, or to `null` without one.
+The ref is typed as the union of the parsers that can be returned, so this one is a
+`Ref<number | string | null>`.
 
-One option stays static. `key` in `useRouteStates` names the ref it returns, as in
-`filters.page`. It is an identifier in your source rather than data, so use `urlKey` for the
-part that varies.
+What the source holds is not rewritten when the parser changes. It is read again through the
+new one, so `?value=42` gives the number `42` and then the string `'42'`. A value the new
+parser will not accept reads as that parser's default, or as `null` when it has none.
+
+## The one that stays
+
+`key` in `useRouteStates` names the ref that comes back, as in `filters.page`. It is part of
+the shape of the returned object rather than data, so it is read once. Everything variable
+about the param belongs in `urlKey`.
+
+`defineStorageState` takes the same options as plain values, since it builds a state that has
+no scope to track anything in.

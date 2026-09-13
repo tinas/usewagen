@@ -1,78 +1,30 @@
 # Configuration
 
-`createWagen` collects the defaults for every composable in the app. It is optional, and
-without it the composables fall back to the same defaults on their own.
+`createWagen` is where an app decides once what every state would otherwise repeat. It is
+optional: without it the composables use the same defaults, and the first call creates an
+instance on its own.
 
-```ts
+```ts [main.ts]
 import { createApp } from 'vue'
 import { createWagen } from 'usewagen'
 import App from './App.vue'
 
 const wagen = createWagen({
-  storage: { prefix: 'app:' },
+  storage: { prefix: 'app:', onError: error => report(error) },
   router: { history: 'push' },
 })
 
 createApp(App).use(wagen).mount('#app')
 ```
 
-## parsers
+A `prefix` is the one setting an app with any storage state wants. It keeps the entries of
+this app apart from everything else on the origin, and it is what makes `keys` and `clear`
+able to tell which entries belong here. `onError` is the only report of a storage write the
+browser refused, and `history` is where an app decides whether its URL changes are steps the
+back button undoes.
 
-- **Type** `Record<string, Parser<any>>`
-- **Default** `{}`
-
-The parsers that can be used by name, as in `{ name: 'parseAsSlug' }`. The built-in parsers
-are always available and do not need to be listed here.
-
-## Storage options
-
-### prefix
-
-- **Type** `string`
-- **Default** `''`
-
-Put in front of every key. It keeps one app out of another's entries on the same origin,
-and it decides which entries `keys` and `clear` consider their own.
-
-### crossTab
-
-- **Type** `boolean`
-- **Default** `true` for local storage
-
-Whether a write in another tab updates the refs in this one, which the browser reports
-through the `storage` event. Session storage is per tab, so this does nothing there.
-
-### default
-
-- **Type** `'local' | 'session'`
-- **Default** `'local'`
-
-The storage `useStorage` picks when a call does not name one.
-
-### mode
-
-- **Type** `'optimistic' | 'source'`
-- **Default** `'optimistic'`
-
-Whether storage state keeps a copy of what was written, for every call that does not set its
-own. See [mode](/guide/storage-state#mode).
-
-### onError
-
-- **Type** `(error: unknown) => void`
-- **Default** none
-
-Called when the browser refuses an operation, which happens when the quota is full or when
-storage is disabled. Without a handler these errors pass silently and the value is simply
-not written.
-
-### local and session
-
-- **Type** `StorageInstance`
-- **Default** the built-in instances
-
-Replaces a storage entirely, which is how you swap in memory storage on the server or a
-storage of your own.
+The configuration is also where a storage is replaced outright, which is how a test or a
+server run swaps in something that is not the browser's.
 
 ```ts
 import { createMemoryStorage } from 'usewagen/storage'
@@ -80,61 +32,35 @@ import { createMemoryStorage } from 'usewagen/storage'
 createWagen({ storage: { session: createMemoryStorage() } })
 ```
 
-## Router options
+Parsers used by name are registered here as well. See
+[Parsers](/guide/parsers#using-a-parser-by-name).
 
-### history
-
-- **Type** `'push' | 'replace'`
-- **Default** `'replace'`
-
-How a write navigates, for every route state that does not set its own.
-
-### source
-
-- **Type** `'query' | 'params'`
-- **Default** `'query'`
-
-Where route state is read from by default.
-
-### clearOnDefault
-
-- **Type** `boolean`
-- **Default** `true`
-
-Whether a value equal to the parser default is removed instead of written.
-
-### mode
-
-- **Type** `'optimistic' | 'source'`
-- **Default** `'optimistic'`
-
-Whether route state keeps a copy of what was written, for every call that does not set its
-own. See [mode](/guide/route-state#mode).
+[Instance](/api/wagen) lists every option with its default.
 
 ## Reading the instance
 
-`useWagen` returns the active instance inside a component. It carries the parsers you
-registered, the resolved router defaults and the storage instances behind the composables.
+`useWagen` hands a component the active instance, which carries the registered parsers, the
+resolved router defaults and the storage instances the composables write through.
 
 ```ts
 import { useWagen } from 'usewagen'
 
-const { storage, router, parsers } = useWagen()
+const { storage } = useWagen()
 
 storage.local.keys()
 storage.default.clear({ except: ['theme'] })
 ```
 
-Outside of a component there is `getActiveWagen`, which returns the installed instance, or
-creates one with the defaults if the plugin was never used.
+Outside a component, `getActiveWagen` returns the installed instance, or creates one with the
+defaults when there is none.
 
-`wagen.destroy()` releases the storage instances it created and clears the active instance,
-which is what a test wants between two cases.
+`wagen.destroy()` releases the storage instances the instance created and clears it as the
+active one, which is what a test does between two cases.
 
-## Splitting the config
+## Keeping the config elsewhere
 
-`defineWagenConfig` returns the object it is given and does nothing else. It is there so a
-config can live in its own file with its types intact.
+`defineWagenConfig` returns the object it is given, and exists so that a configuration can
+live in its own file without losing its types.
 
 ```ts [wagen.config.ts]
 import { defineWagenConfig } from 'usewagen'

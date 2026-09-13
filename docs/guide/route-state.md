@@ -1,114 +1,134 @@
 # Route State
 
-Route state keeps a value in the URL, so the address bar, the back button and a pasted link
-all agree with what your components render. A param that is missing reads as the parser
-default, if the parser has one, which is what `clearOnDefault` builds on.
+Route state puts a value in the URL and gives you a ref over it. The address bar, the back
+button, a reload and a shared link all describe the same screen, because the screen is
+rendered from the URL.
+
+::: info
+The composables on this page call `useRoute` and `useRouter`, so they need `vue-router` 4 or
+5 installed on the app.
+:::
 
 ```vue
 <script setup lang="ts">
-import { parseAsString } from 'usewagen'
 import { useRouteState } from 'usewagen/router'
 
-const q = useRouteState({ key: 'q', parser: parseAsString })
+const q = useRouteState({ key: 'q' })
 </script>
 
 <template>
-  <input v-model="q" />
+  <input v-model="q" placeholder="Search" />
 </template>
 ```
 
-Typing in the input writes to `?q=`. Clearing it leaves `?q=` behind, since an empty string
-is a value of its own, and setting the ref to `null` is what removes the param. Without a
-parser the value is a `Ref<string | null>`, which is what the URL gives you.
+Typing `vue` puts `?q=vue` in the address bar. Without a parser the ref is a
+`Ref<string | null>`, which is what a query string can hold, and `key` is both the name of
+the state and the name of the param.
 
-A write reads back right away, the way a `ref` does, while the navigation itself is applied
-on the next tick. Every write made in the same tick is collected and applied in a single
-navigation: separate route states, the hash, and the `useRouteStates` batch API alike.
+## Typed values
+
+A parser turns the param into the value you want to work with, and decides the type of the
+ref along the way.
+
+```ts
+import { parseAsArrayOf, parseAsInteger, parseAsString } from 'usewagen'
+
+const page = useRouteState({ key: 'page', parser: parseAsInteger.withDefault(1) })
+const tags = useRouteState({ key: 'tags', parser: parseAsArrayOf(parseAsString) })
+```
+
+`page` is a `Ref<number>` rather than `Ref<number | null>`, because `withDefault` says what
+a missing param means. `tags` reads `?tags=vue,vite` as `['vue', 'vite']`.
+
+A missing param and a param edited into something the parser cannot read both give the
+default, so there is no error to catch. [Parsers](/guide/parsers) covers what is available
+and how to write your own.
+
+## Writing
+
+Writing the ref writes the URL.
+
+```ts
+page.value = 2 // ?page=2
+q.value = '' // ?q=
+q.value = null // the param is gone
+```
+
+An empty string is a value, so it stays in the URL. `null` is what removes a param, which
+also means an input cleared with `v-model` leaves `?q=` behind. Write that `null` from
+script code rather than from a template, because Vue's template types keep the type a ref
+reads and not the wider one it accepts.
+
+Writing the default takes the param out instead of writing it, since a missing param already
+reads as the default, so a shared link carries what the user changed and nothing else.
+`clearOnDefault: false` writes it like any other value.
+
+```ts
+page.value = 1 // the param is gone, and page.value is still 1
+```
+
+Writes made in the same tick are collected and applied as one navigation, so a page number
+and a filter that change together update the URL once rather than twice.
 
 ```ts
 page.value = 2
-tab.value = 'open'
-// one navigation, /?page=2&tab=open
+tags.value = ['vue']
+// /?page=2&tags=vue
 ```
 
-If a navigation guard cancels that navigation, the refs go back to what the URL actually
-holds rather than keeping a value that was never applied. `mode` is what decides this.
+By default a write replaces the current history entry, which is what filters and pagination
+want. `history: 'push'` adds one instead, so the back button undoes the change. When writes
+that ask for different things end up in the same navigation, the one asking for `'push'`
+decides.
 
-## Options
+## Reading back a write
 
-### key
+The ref reads back the value you assigned right away, before the navigation that carries it
+has run, so a state behaves like a plain `ref` in the code around it. Once the navigation
+lands, the URL is what the ref reads, and a navigation a guard cancels returns the ref to
+the value the URL holds.
 
-- **Type** `string`
-- **Required**
+Where a value that might not land must never be shown, [`mode: 'source'`](/guide/how-it-works#what-you-read-in-the-meantime) reads
+the route on every access instead.
 
-Names the state. It is also the param that is read and written, unless `urlKey` says
-otherwise.
+## Several params together
 
-### parser
+`useRouteStates` describes a group of params, returns a ref per key and adds three functions
+for working with the group as a whole.
 
-- **Type** `Parser<T>`
-- **Default** `parseAsString`
+```ts
+import { parseAsInteger, parseAsString } from 'usewagen'
+import { useRouteStates } from 'usewagen/router'
 
-Turns the string in the URL into a value and back. It also decides the type of the ref, so
-`parseAsInteger` gives you a `Ref<number | null>` and `parseAsInteger.withDefault(1)` a
-`Ref<number>`.
+const filters = useRouteStates([
+  { key: 'page', parser: parseAsInteger.withDefault(1) },
+  { key: 'q' },
+  { key: 'sort', parser: parseAsString },
+])
 
-### urlKey
+filters.q.value = 'vue'
+filters.set({ q: 'vue', page: 1 })
+filters.reset()
+filters.toObject()
+```
 
-- **Type** `string`
-- **Default** the value of `key`
+Each entry takes the options a single route state takes. `set` writes a patch and leaves the
+keys it does not mention alone, `reset` puts every key back to its default, and `toObject`
+gives the current values as a plain object, typed key by key. Both `set` and `reset` take a
+history mode for that one call.
 
-The param name to use in the URL. Set it when the name in your code and the name in the URL
-should differ, or when the URL name is decided at runtime.
+```ts
+filters.set({ page: 2 }, { history: 'push' })
+```
 
-### source
+The `key` here names the ref you get back, as in `filters.page`, so it is read once. A param
+name that changes while the app runs goes in `urlKey`, which is the name in the URL and is
+reactive like every other option.
 
-- **Type** `'query' | 'params'`
-- **Default** `'query'`
+## Definitions outside the component
 
-Where the value is read from. `'query'` uses the search string, `'params'` uses the dynamic
-segments of the matched route.
-
-### history
-
-- **Type** `'push' | 'replace'`
-- **Default** `'replace'`
-
-How a write navigates. `'replace'` leaves the history alone, which suits filters and
-pagination. `'push'` adds an entry, so the back button undoes the change.
-
-### clearOnDefault
-
-- **Type** `boolean`
-- **Default** `true`
-
-When the parser has a default and the value is equal to it, the param is removed instead of
-written out, since a missing param reads as that default anyway. It keeps defaults out of
-shared links. Turn it off and the value is written like any other.
-
-### mode
-
-- **Type** `'optimistic' | 'source'`
-- **Default** `'optimistic'`
-
-Whether the state keeps a copy of what you wrote.
-
-With `'optimistic'` a write is visible on the next read, before the navigation that carries
-it to the URL has run. The copy is held until the navigation settles: once it lands the URL
-and the copy agree, and if a guard cancels it the URL wins and the ref goes back.
-
-With `'source'` every read goes to the current route, so a write is only visible after the
-navigation. This is the plain pass-through, and it is what you want when nothing may ever
-show a value the URL does not have.
-
-Either way an external navigation wins over the copy, whether it is the back button or a
-`router.push` from somewhere else, so a ref can never be left behind.
-
-## Sharing a definition
-
-`routeStateOptions` returns the options you give it, typed. It is there so a definition can
-live next to the code that owns it and be used from more than one component, with the parser
-and the key carried through.
+`routeStateOptions` returns the options you hand it with their types intact, so a definition
+can live where the feature lives and be used from more than one component.
 
 ```ts [filters.ts]
 import { parseAsInteger, parseAsString } from 'usewagen'
@@ -119,86 +139,28 @@ export const pageOptions = routeStateOptions({
   parser: parseAsInteger.withDefault(1),
 })
 
-export const tabOptions = routeStateOptions({ key: 'tab', parser: parseAsString })
+export const queryOptions = routeStateOptions({ key: 'q', parser: parseAsString })
 ```
 
 ```ts
 const page = useRouteState(pageOptions)
-const filters = useRouteStates([pageOptions, tabOptions])
+const filters = useRouteStates([pageOptions, queryOptions])
 ```
 
-`page` is a `Ref<number>` and `filters.tab` a `Ref<string | null>`, the same as if the
-options had been written inline.
+The parser travels with the definition, so `page` is a `Ref<number>` in both places, and an
+option that does not exist is a type error rather than a key that is quietly ignored.
+`routeHashOptions` does the same for the hash.
 
-Wrap the options in a getter when they read state that changes, and pass the getter itself
-rather than calling it.
+## Route params and the hash
+
+The query string is not the only part of a URL that holds state. `source: 'params'` reads
+and writes the dynamic segments of the matched route instead.
 
 ```ts
-const pageOptions = routeStateOptions(() => ({
-  key: `${section.value}-page`,
-  parser: parseAsInteger.withDefault(1),
-}))
+const id = useRouteState({ key: 'id', source: 'params' })
 ```
 
-A function around it gives you a definition per argument, which is how the same state is
-reused for several sections.
-
-```ts
-function sectionOptions(section: string) {
-  return routeStateOptions({ key: `${section}-page`, parser: parseAsInteger.withDefault(1) })
-}
-
-const left = useRouteState(sectionOptions('left'))
-const right = useRouteState(sectionOptions('right'))
-```
-
-`routeHashOptions` does the same for `useRouteHash`.
-
-## Several params together
-
-`useRouteStates` takes a list of definitions and returns a ref per key, plus a small API for
-working with them as a group.
-
-```ts
-import { parseAsArrayOf, parseAsInteger, parseAsString } from 'usewagen'
-import { useRouteStates } from 'usewagen/router'
-
-const filters = useRouteStates([
-  { key: 'page', parser: parseAsInteger.withDefault(1) },
-  { key: 'q' },
-  { key: 'tags', parser: parseAsArrayOf(parseAsString) },
-])
-
-filters.page.value++
-filters.set({ page: 1, q: 'vue' })
-filters.reset()
-filters.toObject()
-```
-
-Each definition takes the same options as `useRouteState`. `filters.page` is a `Ref<number>`
-and `filters.q` a `Ref<string | null>`, and every ref can be read and written on its own.
-
-### set
-
-Writes a patch, leaving out the keys you do not mention. The whole patch lands in one
-navigation.
-
-### reset
-
-Puts every key back to its default, which usually means the params leave the URL.
-
-### toObject
-
-Returns the current values as a plain object, typed key by key.
-
-`set` and `reset` also take a history override for that one call, which wins over the
-`history` of each state.
-
-```ts
-filters.set({ page: 2 }, { history: 'push' })
-```
-
-## The hash
+`useRouteHash` covers the fragment, keeping the leading `#` as part of the value.
 
 ```ts
 import { useRouteHash } from 'usewagen/router'
@@ -206,13 +168,7 @@ import { useRouteHash } from 'usewagen/router'
 const hash = useRouteHash()
 
 hash.value = '#section'
+hash.value = null // the fragment is gone
 ```
 
-`useRouteHash` returns a `Ref<string | null>` and keeps the leading `#` in the value. It
-takes `parser`, `history`, `clearOnDefault` and `mode`, with the same defaults as above, and
-its writes join the same navigation as the params written beside them.
-
-::: warning
-The router composables call `useRoute` and `useRouter`, so a router has to be installed on
-the app.
-:::
+A hash written beside a param joins the same navigation as that param.

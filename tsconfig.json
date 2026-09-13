@@ -15,7 +15,12 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "usewagen": ["./src/index.ts"],
+      "usewagen/router": ["./src/router/index.ts"],
+      "usewagen/storage": ["./src/storage/index.ts"]
+    }
   },
   "include": [
     "src",
@@ -24,6 +29,7 @@
     "vite.config.ts",
     "docs/.vitepress/components/*.vue",
     "docs/.vitepress/*.ts",
-    "docs/.vitepress/theme"
+    "docs/.vitepress/theme",
+    "docs/examples/demos/*.vue"
   ]
 }
