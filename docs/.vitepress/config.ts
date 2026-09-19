@@ -90,6 +90,7 @@ export default defineConfig({
             { text: 'Pagination', link: '/examples/' },
             { text: 'Filters', link: '/examples/filters' },
             { text: 'Tabs', link: '/examples/tabs' },
+            { text: 'Date range', link: '/examples/date-range' },
             { text: 'Preferences', link: '/examples/preferences' },
             { text: 'Form draft', link: '/examples/form-draft' },
           ],
