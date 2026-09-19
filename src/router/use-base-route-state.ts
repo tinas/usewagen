@@ -4,7 +4,7 @@ import type { HistoryMode, ResolvedRouteStateOptions, RouteStateSource } from '.
 import { customRef, toValue } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { normalizeRaw, parseValue, serializeValue } from '../parser/utils'
-import { enqueue } from './queue'
+import { getRouteQueue } from './queue'
 
 export interface RouteStateHandle {
   state: Ref<any, any>
@@ -14,6 +14,7 @@ export interface RouteStateHandle {
 export function useBaseRouteState() {
   const route = useRoute()
   const router = useRouter()
+  const queue = getRouteQueue(router)
 
   function createRouteStateRef(
     options: MaybeRefOrGetter<ResolvedRouteStateOptions>,
@@ -51,7 +52,7 @@ export function useBaseRouteState() {
       }
     })
 
-    function write(serialized: string | null, history?: HistoryMode): Promise<void> {
+    async function write(serialized: string | null, history?: HistoryMode): Promise<void> {
       const resolved = toValue(options)
       const optimistic = resolved.mode === 'optimistic'
       const current = ++generation
@@ -64,7 +65,7 @@ export function useBaseRouteState() {
         trigger()
       }
 
-      const settled = enqueue(router, {
+      const settled = queue.enqueue({
         history: history ?? resolved.history,
         changes: [{ urlKey: resolved.urlKey, source: resolved.source, serialized }],
       })

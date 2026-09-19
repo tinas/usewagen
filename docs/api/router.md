@@ -45,7 +45,8 @@ means `undefined`, a key left out means the instance decides.
 #### history
 
 Writes made in the same tick become one navigation, and that navigation is pushed when any
-write in it asks for `'push'`.
+write in it asks for `'push'`. A write made while that navigation is still running replaces
+it with one that carries both, pushed when either asked for it.
 
 #### mode
 
