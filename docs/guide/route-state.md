@@ -123,6 +123,10 @@ history mode for that one call.
 filters.set({ page: 2 }, { history: 'push' })
 ```
 
+A rule that spans two params, such as a start date that never comes after an end date, is
+a `computed` over their refs that writes through `set`. [Date range](/examples/date-range)
+shows one.
+
 The `key` here names the ref you get back, as in `filters.page`, so it is read once. A param
 name that changes while the app runs goes in `urlKey`, which is the name in the URL and is
 reactive like every other option.
