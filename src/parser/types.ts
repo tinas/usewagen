@@ -54,4 +54,7 @@ type ResolveInputValue<P, M> = [P] extends [undefined]
             : string | M
           : string | M
 
-export type InferInputWritable<P, M = Missing> = InferInputValue<P, M> | M | null | undefined
+type ResolveInputWritable<P, M> =
+  ResolveInputValue<P, M> extends infer V ? V | M | null | undefined : never
+
+export type InferInputWritable<P, M = Missing> = ResolveInputWritable<UnwrapOption<P>, M>

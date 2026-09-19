@@ -1,3 +1,4 @@
+import type { ComputedRef, Ref } from 'vue'
 import type { Parser, ParserWithDefault } from '../../src/parser/parsers'
 import type { InferInputValue, InferInputWritable, ParserInput } from '../../src/parser/types'
 import type { Missing } from '../../src/types'
@@ -71,6 +72,15 @@ describe('InferInputWritable', () => {
     type Result = InferInputWritable<undefined>
     expectTypeOf<Result>().toEqualTypeOf<string | null | undefined>()
   })
+
+  test('a parser behind a ref or a computed widens like the plain parser', () => {
+    expectTypeOf<InferInputWritable<Ref<Parser<number>>>>().toEqualTypeOf<
+      number | null | undefined
+    >()
+    expectTypeOf<InferInputWritable<ComputedRef<ParserWithDefault<number>>>>().toEqualTypeOf<
+      number | null | undefined
+    >()
+  })
 })
 
 describe('named parser ref defaultValue', () => {
@@ -131,6 +141,15 @@ describe('InferInputWritable with a missing value', () => {
 
   test('ParserWithDefault<T> still accepts E, which clears the value', () => {
     expectTypeOf<InferInputWritable<ParserWithDefault<number>, 'none'>>().toEqualTypeOf<
+      number | 'none' | null | undefined
+    >()
+  })
+
+  test('a name-based ref widens to value | E | null | undefined', () => {
+    expectTypeOf<InferInputWritable<{ name: 'parseAsInteger' }, undefined>>().toEqualTypeOf<
+      number | null | undefined
+    >()
+    expectTypeOf<InferInputWritable<{ name: 'parseAsInteger' }, 'none'>>().toEqualTypeOf<
       number | 'none' | null | undefined
     >()
   })
