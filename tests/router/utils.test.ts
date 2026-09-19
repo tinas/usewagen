@@ -13,7 +13,11 @@ const DEFAULTS: ResolvedWagenRouterOptions = {
 
 describe('toResolvedOptions', () => {
   test('applies the given defaults for optional fields', () => {
-    const resolved = toResolvedOptions({ key: 'q', parser: { name: 'parseAsString' } }, DEFAULTS)
+    const resolved = toResolvedOptions(
+      { key: 'q', parser: { name: 'parseAsString' } },
+      DEFAULTS,
+      null,
+    )
 
     expect(resolved.key).toBe('q')
     expect(resolved.urlKey).toBe('q')
@@ -23,16 +27,18 @@ describe('toResolvedOptions', () => {
     expect(resolved.mode).toBe('optimistic')
   })
 
-  test('takes every default from the instance, not from hardcoded values', () => {
+  test('takes every default from the arguments, not from hardcoded values', () => {
     const resolved = toResolvedOptions(
       { key: 'q' },
       { history: 'push', source: 'params', clearOnDefault: false, mode: 'source' },
+      undefined,
     )
 
     expect(resolved.source).toBe('params')
     expect(resolved.history).toBe('push')
     expect(resolved.clearOnDefault).toBe(false)
     expect(resolved.mode).toBe('source')
+    expect(resolved.missing).toBeUndefined()
   })
 
   test('preserves explicit values over the defaults', () => {
@@ -46,6 +52,7 @@ describe('toResolvedOptions', () => {
         clearOnDefault: false,
       },
       DEFAULTS,
+      null,
     )
 
     expect(resolved.urlKey).toBe('q')
@@ -58,15 +65,28 @@ describe('toResolvedOptions', () => {
     const resolved = toResolvedOptions(
       { key: 'page', parser: { name: 'parseAsInteger' } },
       DEFAULTS,
+      null,
     )
 
     expect(resolved.urlKey).toBe('page')
   })
 
   test('parser defaults to parseAsString when omitted', () => {
-    const resolved = toResolvedOptions({ key: 'q' }, DEFAULTS)
+    const resolved = toResolvedOptions({ key: 'q' }, DEFAULTS, null)
 
     expect(resolved.parser.parse('hello')).toBe('hello')
     expect(resolved.parser.defaultValue).toBeUndefined()
+  })
+
+  test('the missing value is the one given', () => {
+    expect(toResolvedOptions({ key: 'q' }, DEFAULTS, null).missing).toBeNull()
+    expect(toResolvedOptions({ key: 'q' }, DEFAULTS, undefined).missing).toBeUndefined()
+  })
+
+  test('an explicit missing value wins over the given one, even when it is undefined', () => {
+    const resolved = toResolvedOptions({ key: 'q', missing: undefined }, DEFAULTS, null)
+
+    expect(resolved.missing).toBeUndefined()
+    expect(toResolvedOptions({ key: 'q', missing: 0 }, DEFAULTS, null).missing).toBe(0)
   })
 })

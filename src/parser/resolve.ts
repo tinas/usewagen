@@ -49,16 +49,11 @@ function fromName(
     return parseAsString
   }
 
-  const base = {
+  return {
     parse: (raw: string) => get().parse(raw),
     serialize: (value: any) => get().serialize(value),
-  }
-
-  if (override) return { ...base, defaultValue: override.defaultValue }
-
-  return {
-    ...base,
     get defaultValue() {
+      if (override) return override.defaultValue
       return (get() as ParserWithDefault<any>).defaultValue
     },
   }

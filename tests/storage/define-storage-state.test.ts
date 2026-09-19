@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vite-plus/test'
+import { afterEach, describe, expect, expectTypeOf, test } from 'vite-plus/test'
 
 import { parseAsInteger, parseAsJson } from '../../src/parser/parsers'
 import { defineStorageState } from '../../src/storage/define-storage-state'
@@ -179,6 +179,85 @@ describe('defineStorageState', () => {
 
     expect(theme.storage).toBe(wagen.storage.local)
     expect(wagen.storage.local.getItem('theme')).toBe('dark')
+  })
+})
+
+describe('defineStorageState missing value', () => {
+  test('a missing entry reads as the missing value', () => {
+    const storage = createMemoryStorage()
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: undefined,
+    })
+
+    expectTypeOf(count.get()).toEqualTypeOf<number | undefined>()
+    expect(count.get()).toBeUndefined()
+  })
+
+  test('an entry the parser rejects reads as the missing value', () => {
+    const storage = createMemoryStorage()
+    storage.setItem('count', 'not-a-number')
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: undefined,
+    })
+
+    expect(count.get()).toBeUndefined()
+  })
+
+  test('setting the missing value removes the entry', () => {
+    const storage = createMemoryStorage()
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: undefined,
+    })
+
+    count.set(5)
+    count.set(undefined)
+
+    expect(storage.has('count')).toBe(false)
+  })
+
+  test('null and undefined remove the entry whatever the missing value is', () => {
+    const storage = createMemoryStorage()
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: 'none',
+    })
+
+    count.set(5)
+    count.set(null)
+    expect(storage.has('count')).toBe(false)
+    expect(count.get()).toBe('none')
+
+    count.set(5)
+    count.set(undefined)
+    expect(storage.has('count')).toBe(false)
+    expect(count.get()).toBe('none')
+  })
+
+  test('follows the missing value of the instance installed after the definition', () => {
+    const theme = defineStorageState({ key: 'theme' })
+    expect(theme.get()).toBeNull()
+
+    install({ missing: undefined })
+
+    expect(theme.get()).toBeUndefined()
+  })
+
+  test('an explicit missing value never follows the instance', () => {
+    const theme = defineStorageState({ key: 'theme', missing: null })
+    install({ missing: undefined })
+
+    expect(theme.get()).toBeNull()
   })
 })
 

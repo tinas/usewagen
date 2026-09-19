@@ -1,5 +1,6 @@
 import type { Parser, ParserWithDefault } from '../../src/parser/parsers'
 import type { InferInputValue, InferInputWritable, ParserInput } from '../../src/parser/types'
+import type { Missing } from '../../src/types'
 
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
 
@@ -85,5 +86,58 @@ describe('named parser ref defaultValue', () => {
 
     expect([asValue, asFactory]).toHaveLength(2)
     expect(typeof reject).toBe('function')
+  })
+})
+
+describe('Missing', () => {
+  test('is null until Register says otherwise', () => {
+    expectTypeOf<Missing>().toEqualTypeOf<null>()
+  })
+})
+
+describe('InferInputValue with a missing value', () => {
+  test('Parser<T> infers T | E', () => {
+    expectTypeOf<InferInputValue<Parser<number>, undefined>>().toEqualTypeOf<number | undefined>()
+  })
+
+  test('ParserWithDefault<T> ignores E, since the default always answers', () => {
+    expectTypeOf<InferInputValue<ParserWithDefault<number>, undefined>>().toEqualTypeOf<number>()
+  })
+
+  test('a name-based ref infers value | E', () => {
+    expectTypeOf<InferInputValue<{ name: 'parseAsInteger' }, undefined>>().toEqualTypeOf<
+      number | undefined
+    >()
+  })
+
+  test('an omitted parser infers string | E', () => {
+    expectTypeOf<InferInputValue<undefined, undefined>>().toEqualTypeOf<string | undefined>()
+  })
+
+  test('any value can stand in for the missing one', () => {
+    expectTypeOf<InferInputValue<Parser<number>, 'none'>>().toEqualTypeOf<number | 'none'>()
+  })
+})
+
+describe('InferInputWritable with a missing value', () => {
+  test('Parser<T> widens to T | E | null | undefined', () => {
+    expectTypeOf<InferInputWritable<Parser<number>, undefined>>().toEqualTypeOf<
+      number | null | undefined
+    >()
+    expectTypeOf<InferInputWritable<Parser<number>, 'none'>>().toEqualTypeOf<
+      number | 'none' | null | undefined
+    >()
+  })
+
+  test('ParserWithDefault<T> still accepts E, which clears the value', () => {
+    expectTypeOf<InferInputWritable<ParserWithDefault<number>, 'none'>>().toEqualTypeOf<
+      number | 'none' | null | undefined
+    >()
+  })
+
+  test('null and undefined stay writable whatever E is', () => {
+    expectTypeOf<null>().toExtend<InferInputWritable<Parser<number>, 'none'>>()
+    expectTypeOf<undefined>().toExtend<InferInputWritable<Parser<number>, 'none'>>()
+    expectTypeOf<null>().toExtend<InferInputWritable<ParserWithDefault<number>, -1>>()
   })
 })

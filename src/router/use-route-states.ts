@@ -1,6 +1,12 @@
 import type { ComputedRef, Ref } from 'vue'
-import type { ReactiveFields } from '../types'
-import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
+import type { Missing, ReactiveFields } from '../types'
+import type {
+  InferInputValue,
+  InferInputWritable,
+  ParserInput,
+  UnwrapOption,
+  WithParser,
+} from '../parser/types'
 import type { HistoryMode, ResolvedRouteStateOptions, RouteStateOptions } from './types'
 import type { RouteStateHandle } from './use-base-route-state'
 
@@ -14,26 +20,38 @@ import { resolveBatchHistory } from './queue'
 import { useBaseRouteState } from './use-base-route-state'
 import { toResolvedOptions } from './utils'
 
-export type RouteStateConfig<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveFields<WithParser<RouteStateOptions, P>, 'key'>
+export type RouteStateConfig<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = ReactiveFields<WithParser<RouteStateOptions, P, M>, 'key' | 'missing'>
 
 export interface BatchOptions {
   history?: HistoryMode
 }
 
+type ConfigMissing<TConfig> = 'missing' extends keyof TConfig
+  ? UnwrapOption<TConfig['missing']>
+  : Missing
+
 type Refs<TOptions extends readonly RouteStateConfig[]> = {
   [TOption in TOptions[number] as TOption['key']]: Ref<
-    InferInputValue<TOption['parser']>,
-    InferInputWritable<TOption['parser']>
+    InferInputValue<TOption['parser'], ConfigMissing<TOption>>,
+    InferInputWritable<TOption['parser'], ConfigMissing<TOption>>
   >
 }
 
 type StatePatch<TOptions extends readonly RouteStateConfig[]> = Partial<{
-  [TOption in TOptions[number] as TOption['key']]: InferInputWritable<TOption['parser']>
+  [TOption in TOptions[number] as TOption['key']]: InferInputWritable<
+    TOption['parser'],
+    ConfigMissing<TOption>
+  >
 }>
 
 type StateSnapshot<TOptions extends readonly RouteStateConfig[]> = {
-  [TOption in TOptions[number] as TOption['key']]: InferInputValue<TOption['parser']>
+  [TOption in TOptions[number] as TOption['key']]: InferInputValue<
+    TOption['parser'],
+    ConfigMissing<TOption>
+  >
 }
 
 export interface UseRouteStatesApi<TOptions extends readonly RouteStateConfig[]> {
@@ -51,10 +69,10 @@ export function useRouteStates<const TOptions extends readonly RouteStateConfig[
   if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useRouteStates')
 
   const { createRouteStateRef } = useBaseRouteState()
-  const defaults = getActiveWagen().router
+  const { router: defaults, missing } = getActiveWagen()
 
   const resolvedList: ComputedRef<ResolvedRouteStateOptions>[] = configs.map(config =>
-    computed(() => toResolvedOptions(toValueDeep<RouteStateOptions>(config), defaults)),
+    computed(() => toResolvedOptions(toValueDeep<RouteStateOptions>(config), defaults, missing)),
   )
 
   const handles: RouteStateHandle[] = resolvedList.map(resolved => createRouteStateRef(resolved))
@@ -80,14 +98,11 @@ export function useRouteStates<const TOptions extends readonly RouteStateConfig[
       const candidates: HistoryMode[] = []
 
       resolvedList.forEach((resolved, index) => {
-        const { key, parser, clearOnDefault, history } = resolved.value
+        const { key, history } = resolved.value
         if (!(key in patch)) return
 
         const next = (patch as Record<string, unknown>)[key]
-        writes.push({
-          handle: handles[index],
-          serialized: serializeValue(parser, clearOnDefault, next),
-        })
+        writes.push({ handle: handles[index], serialized: serializeValue(resolved.value, next) })
         candidates.push(history)
       })
 
@@ -98,12 +113,9 @@ export function useRouteStates<const TOptions extends readonly RouteStateConfig[
       const candidates: HistoryMode[] = []
 
       resolvedList.forEach((resolved, index) => {
-        const { parser, clearOnDefault, history } = resolved.value
+        const { parser, history } = resolved.value
         const next = parser.defaultValue !== undefined ? unwrapDefault(parser.defaultValue) : null
-        writes.push({
-          handle: handles[index],
-          serialized: serializeValue(parser, clearOnDefault, next),
-        })
+        writes.push({ handle: handles[index], serialized: serializeValue(resolved.value, next) })
         candidates.push(history)
       })
 

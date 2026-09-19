@@ -1,6 +1,12 @@
 import type { Ref } from 'vue'
-import type { ReactiveOptions } from '../types'
-import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
+import type { Missing, ReactiveOptions } from '../types'
+import type {
+  InferInputValue,
+  InferInputWritable,
+  ParserInput,
+  UnwrapOption,
+  WithParser,
+} from '../parser/types'
 import type { ResolvedRouteStateOptions, RouteStateOptions } from './types'
 
 import { computed, getCurrentScope } from 'vue'
@@ -10,21 +16,23 @@ import { getActiveWagen } from '../wagen'
 import { useBaseRouteState } from './use-base-route-state'
 import { toResolvedOptions } from './utils'
 
-export type UseRouteStateOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<WithParser<RouteStateOptions, P>>
+export type UseRouteStateOptions<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = ReactiveOptions<WithParser<RouteStateOptions, P, M>, 'missing'>
 
-export function useRouteState<P extends ParserInput | undefined = undefined>(
-  options: UseRouteStateOptions<P>,
-): Ref<InferInputValue<P>, InferInputWritable<P>>
+export function useRouteState<P extends ParserInput | undefined = undefined, const M = Missing>(
+  options: UseRouteStateOptions<P, M>,
+): Ref<InferInputValue<P, UnwrapOption<M>>, InferInputWritable<P, UnwrapOption<M>>>
 
 export function useRouteState(options: UseRouteStateOptions) {
   if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useRouteState')
 
   const { createRouteStateRef } = useBaseRouteState()
-  const defaults = getActiveWagen().router
+  const { router: defaults, missing } = getActiveWagen()
 
   const resolvedOptions = computed<ResolvedRouteStateOptions>(() =>
-    toResolvedOptions(toValueDeep<RouteStateOptions>(options), defaults),
+    toResolvedOptions(toValueDeep<RouteStateOptions>(options), defaults, missing),
   )
 
   return createRouteStateRef(resolvedOptions).state

@@ -33,6 +33,22 @@ createApp(App).use(router).use(wagen).mount('#app')
 Built-in names are always available and do not belong here. See
 [Named parsers](/api/parsers#named-parsers).
 
+### missing
+
+| Option    | Type      | Default | Description                                                                                                  |
+| --------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `missing` | `Missing` | `null`  | What a state without a default reads when its source holds nothing usable, and what removes it when written. |
+
+The option accepts only the type [Register](#register) names, and is required once `Register`
+names one. While `Register` is empty, `undefined` passes as it does through any optional
+option, so that one value is kept in step with its type by hand. Every state that does not
+set its own `missing` falls back to it. See
+[The missing value](/guide/configuration#the-missing-value).
+
+```ts
+createWagen({ missing: undefined })
+```
+
 ### storage
 
 | Option     | Type                       | Default                               | Description                                                                           |
@@ -110,7 +126,38 @@ export default defineWagenConfig({
 | Member    | Type                           | Description                                                               |
 | --------- | ------------------------------ | ------------------------------------------------------------------------- |
 | `parsers` | `Record<string, Parser>`       | The parsers registered by name.                                           |
+| `missing` | `Missing`                      | The missing value the states fall back to.                                |
 | `storage` | `WagenStorage`                 | `local`, `session`, `default` and the resolved `mode`.                    |
 | `router`  | `Required<WagenRouterOptions>` | The resolved router defaults.                                             |
 | `install` | `(app: App) => void`           | Called by `app.use`.                                                      |
 | `destroy` | `() => void`                   | Releases the storage instances it created and clears the active instance. |
+
+## Register
+
+```ts
+interface Register {}
+```
+
+The interface an app augments to change the types the library resolves. `missing` is the type
+of the missing value, and has to match the value given to [createWagen](#missing). The file
+has to be a module, hence the `export {}`, and it is not the `usewagen.d.ts` the
+[Vite plugin](/api/vite) writes, since that one is regenerated.
+
+```ts [env.d.ts]
+export {}
+
+declare module 'usewagen' {
+  interface Register {
+    missing: undefined
+  }
+}
+```
+
+## Missing
+
+```ts
+type Missing = Register extends { missing: infer M } ? M : null
+```
+
+The type of the missing value: what `Register` names, or `null`. It is what every
+`Ref<T | null>` on these pages becomes once `Register` says otherwise.

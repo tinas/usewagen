@@ -65,6 +65,17 @@ describe('createWagen', () => {
     expect(wagen.storage.local.prefix).toBe('app:')
   })
 
+  test('the missing value is null unless configured', () => {
+    expect(createMemoryWagen().missing).toBeNull()
+  })
+
+  test('keeps an explicit undefined as the missing value', () => {
+    const wagen = createMemoryWagen({ missing: undefined })
+
+    expect(wagen.missing).toBeUndefined()
+    expect('missing' in wagen).toBe(true)
+  })
+
   test('creating it on the server does not crash', () => {
     const ssr = createWagen()
 

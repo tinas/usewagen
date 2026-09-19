@@ -297,4 +297,90 @@ describe('useRouteStates option typing', () => {
 
     expect(typeof reject).toBe('function')
   })
+
+  test('an entry takes a ref or a computed parser, not a getter', () => {
+    const parser = computed(() => parseAsInteger)
+    const state = run(() => useRouteStates([{ key: 'page', parser }]))
+
+    expectTypeOf(state.page.value).toEqualTypeOf<number | null>()
+
+    function reject() {
+      // @ts-expect-error a getter would hide the parser names from the editor
+      useRouteStates([{ key: 'page', parser: () => parseAsInteger }])
+    }
+
+    expect(typeof reject).toBe('function')
+  })
+})
+
+describe('useRouteStates missing value', () => {
+  test('each entry chooses its own missing value', () => {
+    const state = run(() =>
+      useRouteStates([{ key: 'page', parser: parseAsInteger, missing: undefined }, { key: 'q' }]),
+    )
+
+    expectTypeOf(state.page.value).toEqualTypeOf<number | undefined>()
+    expectTypeOf(state.q.value).toEqualTypeOf<string | null>()
+    expectTypeOf(state.toObject()).toEqualTypeOf<{ page: number | undefined; q: string | null }>()
+
+    expect(state.toObject()).toEqual({ page: undefined, q: null })
+  })
+
+  test('set clears a key given its missing value', async () => {
+    await ctx.router.push('/?page=3&q=vue')
+    const state = run(() =>
+      useRouteStates([{ key: 'page', parser: parseAsInteger, missing: undefined }, QUERY]),
+    )
+
+    state.set({ page: undefined, q: null })
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query).toEqual({})
+  })
+
+  test('set clears a key given null whatever its missing value is', async () => {
+    await ctx.router.push('/?page=3')
+    const state = run(() => useRouteStates([{ key: 'page', parser: parseAsInteger, missing: -1 }]))
+
+    state.set({ page: null })
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query).toEqual({})
+    expect(state.page.value).toBe(-1)
+  })
+
+  test('reset leaves a key without a default on its missing value', async () => {
+    await ctx.router.push('/?page=8')
+    const state = run(() =>
+      useRouteStates([{ key: 'page', parser: parseAsInteger, missing: undefined }]),
+    )
+
+    state.reset()
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query).toEqual({})
+    expect(state.page.value).toBeUndefined()
+  })
+
+  test('an entry can give its missing value as a getter', () => {
+    const strict = ref(false)
+    const state = run(() =>
+      useRouteStates([
+        { key: 'page', parser: parseAsInteger, missing: () => (strict.value ? undefined : null) },
+      ]),
+    )
+
+    expectTypeOf(state.page.value).toEqualTypeOf<number | null | undefined>()
+    expect(state.page.value).toBeNull()
+
+    strict.value = true
+    expect(state.page.value).toBeUndefined()
+  })
+
+  test('a readonly config array keeps the missing value in the types', () => {
+    const CONFIGS = [{ key: 'page', parser: parseAsInteger, missing: undefined }] as const
+    const state = run(() => useRouteStates(CONFIGS))
+
+    expectTypeOf(state.page.value).toEqualTypeOf<number | undefined>()
+  })
 })
