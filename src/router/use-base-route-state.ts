@@ -32,22 +32,21 @@ export function useBaseRouteState() {
       return {
         get: () => {
           track()
-          const { urlKey, source, parser, mode } = toValue(options)
-          const current = normalizeRaw(rawValue(urlKey, source))
+          const resolved = toValue(options)
+          const current = normalizeRaw(rawValue(resolved.urlKey, resolved.source))
 
-          if (mode === 'source') {
+          if (resolved.mode === 'source') {
             cache = null
-            return parseValue(parser, current)
+            return parseValue(resolved, current)
           }
 
-          if (cache && cache.seen === current) return parseValue(parser, cache.raw)
+          if (cache && cache.seen === current) return parseValue(resolved, cache.raw)
 
           cache = { seen: current, raw: current }
-          return parseValue(parser, current)
+          return parseValue(resolved, current)
         },
         set: next => {
-          const { parser, clearOnDefault } = toValue(options)
-          void write(serializeValue(parser, clearOnDefault, next))
+          void write(serializeValue(toValue(options), next))
         },
       }
     })

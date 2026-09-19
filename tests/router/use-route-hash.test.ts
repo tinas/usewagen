@@ -218,3 +218,34 @@ describe('useRouteHash option typing', () => {
     expect(typeof reject).toBe('function')
   })
 })
+
+describe('useRouteHash missing value', () => {
+  test('a missing hash reads as the missing value', () => {
+    const hash = run(() => useRouteHash({ missing: undefined }))
+
+    expectTypeOf(hash.value).toEqualTypeOf<string | undefined>()
+    expect(hash.value).toBeUndefined()
+  })
+
+  test('writing the missing value removes the hash', async () => {
+    await ctx.router.push('/#section')
+
+    const hash = run(() => useRouteHash({ missing: undefined }))
+    hash.value = undefined
+    await flush()
+
+    expect(ctx.router.currentRoute.value.hash).toBe('')
+    expect(hash.value).toBeUndefined()
+  })
+
+  test('null removes the hash whatever the missing value is', async () => {
+    await ctx.router.push('/#section')
+
+    const hash = run(() => useRouteHash({ missing: 'none' }))
+    hash.value = null
+    await flush()
+
+    expect(ctx.router.currentRoute.value.hash).toBe('')
+    expect(hash.value).toBe('none')
+  })
+})

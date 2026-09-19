@@ -1,9 +1,10 @@
 import { describe, expect, expectTypeOf, test } from 'vite-plus/test'
 import { computed, ref } from 'vue'
 
-import { parseAsInteger } from '../../src/parser/parsers'
+import { parseAsInteger, parseAsString } from '../../src/parser/parsers'
 import { useRouteState } from '../../src/router/use-route-state'
 import { flush, setupRouter } from '../__helpers__/router'
+import { createMemoryWagen } from '../__helpers__/wagen'
 
 const ctx = setupRouter()
 const { run } = ctx
@@ -332,5 +333,162 @@ describe('useRouteState option typing', () => {
     )
 
     expectTypeOf(page.value).toEqualTypeOf<number>()
+  })
+
+  test('the parser takes a ref or a computed, not a getter', () => {
+    const numeric = ref(true)
+    const parser = computed(() => (numeric.value ? parseAsInteger : parseAsString))
+    const value = run(() => useRouteState({ key: 'value', parser }))
+
+    expectTypeOf(value.value).toEqualTypeOf<number | string | null>()
+
+    function reject() {
+      // @ts-expect-error a getter would hide the parser names from the editor
+      useRouteState({ key: 'value', parser: () => parseAsInteger })
+    }
+
+    expect(typeof reject).toBe('function')
+  })
+})
+
+describe('useRouteState missing value', () => {
+  test('a missing param reads as the missing value', () => {
+    const page = run(() =>
+      useRouteState({ key: 'page', parser: parseAsInteger, missing: undefined }),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number | undefined>()
+    expect(page.value).toBeUndefined()
+  })
+
+  test('a param the parser rejects reads as the missing value', async () => {
+    await ctx.router.push('/?page=later')
+
+    const page = run(() =>
+      useRouteState({ key: 'page', parser: parseAsInteger, missing: undefined }),
+    )
+
+    expect(page.value).toBeUndefined()
+  })
+
+  test('writing the missing value removes the param', async () => {
+    await ctx.router.push('/?page=7')
+
+    const page = run(() =>
+      useRouteState({ key: 'page', parser: parseAsInteger, missing: undefined }),
+    )
+    page.value = undefined
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.page).toBeUndefined()
+    expect(page.value).toBeUndefined()
+  })
+
+  test('null and undefined remove the param whatever the missing value is', async () => {
+    await ctx.router.push('/?page=7')
+
+    const page = run(() => useRouteState({ key: 'page', parser: parseAsInteger, missing: 'none' }))
+    page.value = null
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.page).toBeUndefined()
+    expect(page.value).toBe('none')
+
+    page.value = 7
+    await flush()
+    page.value = undefined
+    await flush()
+
+    expect(ctx.router.currentRoute.value.query.page).toBeUndefined()
+    expect(page.value).toBe('none')
+  })
+
+  test('a default still answers before the missing value does', () => {
+    const page = run(() =>
+      useRouteState({ key: 'page', parser: parseAsInteger.withDefault(1), missing: undefined }),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number>()
+    expect(page.value).toBe(1)
+  })
+
+  test('a literal missing value keeps its literal type', () => {
+    const page = run(() => useRouteState({ key: 'page', parser: parseAsInteger, missing: 'none' }))
+
+    expectTypeOf(page.value).toEqualTypeOf<number | 'none'>()
+    expect(page.value).toBe('none')
+  })
+
+  test('any value can be the missing one', async () => {
+    const page = run(() => useRouteState({ key: 'page', parser: parseAsInteger, missing: -1 }))
+
+    expectTypeOf(page.value).toEqualTypeOf<number>()
+    expect(page.value).toBe(-1)
+
+    page.value = 3
+    await flush()
+    expect(ctx.router.currentRoute.value.query.page).toBe('3')
+
+    page.value = -1
+    await flush()
+    expect(ctx.router.currentRoute.value.query.page).toBeUndefined()
+  })
+
+  test('the configured missing value applies when a call does not name one', () => {
+    ctx.app.use(createMemoryWagen({ missing: undefined }))
+
+    run(() => {
+      const page = useRouteState({ key: 'page', parser: parseAsInteger })
+
+      expect(page.value).toBeUndefined()
+    })
+  })
+
+  test('a call overrides the configured missing value', () => {
+    ctx.app.use(createMemoryWagen({ missing: undefined }))
+
+    run(() => {
+      const page = useRouteState({ key: 'page', parser: parseAsInteger, missing: null })
+
+      expectTypeOf(page.value).toEqualTypeOf<number | null>()
+      expect(page.value).toBeNull()
+    })
+  })
+
+  test('a getter missing value is re-read like any other option', () => {
+    const strict = ref(false)
+    const page = run(() =>
+      useRouteState({
+        key: 'page',
+        parser: parseAsInteger,
+        missing: () => (strict.value ? undefined : null),
+      }),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number | null | undefined>()
+    expect(page.value).toBeNull()
+
+    strict.value = true
+    expect(page.value).toBeUndefined()
+  })
+
+  test('a ref missing value is unwrapped', () => {
+    const missing = ref<null | undefined>(null)
+    const page = run(() => useRouteState({ key: 'page', parser: parseAsInteger, missing }))
+
+    expectTypeOf(page.value).toEqualTypeOf<number | null | undefined>()
+    expect(page.value).toBeNull()
+
+    missing.value = undefined
+    expect(page.value).toBeUndefined()
+  })
+
+  test('the missing value travels with a getter options object', () => {
+    const page = run(() =>
+      useRouteState(() => ({ key: 'page', parser: parseAsInteger, missing: undefined })),
+    )
+
+    expectTypeOf(page.value).toEqualTypeOf<number | undefined>()
+    expect(page.value).toBeUndefined()
   })
 })

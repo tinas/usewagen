@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { parseAsInteger, parseAsString } from '../../src/parser/parsers'
 import { useRouteHash } from '../../src/router/use-route-hash'
@@ -154,7 +154,7 @@ describe('route state reactive parser', () => {
       const numeric = ref(true)
       const state = useRouteState({
         key: 'value',
-        parser: () => (numeric.value ? parseAsInteger : parseAsString),
+        parser: computed(() => (numeric.value ? parseAsInteger : parseAsString)),
       })
 
       expect(state.value).toBe(42)
@@ -170,7 +170,7 @@ describe('route state reactive parser', () => {
       const numeric = ref(false)
       const state = useRouteState({
         key: 'value',
-        parser: () => (numeric.value ? parseAsInteger.withDefault(0) : parseAsString),
+        parser: computed(() => (numeric.value ? parseAsInteger.withDefault(0) : parseAsString)),
       })
 
       expect(state.value).toBe('abc')

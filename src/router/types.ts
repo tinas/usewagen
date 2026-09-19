@@ -9,6 +9,7 @@ export type HistoryMode = 'push' | 'replace'
 export interface RouteStateOptions {
   key: string
   parser?: ParserInput
+  missing?: unknown
   urlKey?: string
   source?: RouteStateSource
   history?: HistoryMode

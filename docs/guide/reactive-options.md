@@ -2,7 +2,9 @@
 
 Nothing in an options object has to be known when the component is written. Every option
 takes a plain value, a `ref`, a `computed` or a getter, and the options object itself can be
-any of those, which is what makes these composables rather than plain functions.
+any of those, which is what makes these composables rather than plain functions. The one
+exception is `parser`, which takes everything but a getter, for a reason
+[explained below](#a-parser-that-follows-the-app).
 
 ```ts
 useLocalStorage({ key: 'theme' })
@@ -49,8 +51,9 @@ const draft = useStorage({
 ```
 
 The router options work like this too, so `source`, `history`, `clearOnDefault` and `mode`
-can all depend on where the user is or what they are doing. `set` and `reset` on a group read
-them at the moment you call them, not when the group was created.
+can all depend on where the user is or what they are doing, and so can `missing` on either
+source. `set` and `reset` on a group read them at the moment you call them, not when the
+group was created.
 
 ## A parser that follows the app
 
@@ -58,18 +61,30 @@ A value whose type depends on something else needs a parser that depends on the 
 A filter over a column is the usual case: a number for one column, a string for the next.
 
 ```ts
-const value = useRouteState({
-  key: 'value',
-  parser: () => (column.value.numeric ? parseAsInteger : parseAsString),
-})
+const parser = computed(() => (column.value.numeric ? parseAsInteger : parseAsString))
+const value = useRouteState({ key: 'value', parser })
 ```
 
 The ref is typed as the union of the parsers that can be returned, so this one is a
 `Ref<number | string | null>`.
 
+`parser` takes a value, a `ref` or a `computed`, but not a getter, and it is the only option
+that does not. Every function has a `name` of its own, and TypeScript matches
+`{ name: '...' }` against that before it looks at the parser names, so a getter in that
+position would stop your editor from offering them as you type. A getter around the whole
+options object keeps the parser reactive all the same.
+
+```ts
+const value = useRouteState(() => ({
+  key: 'value',
+  parser: column.value.numeric ? parseAsInteger : parseAsString,
+}))
+```
+
 What the source holds is not rewritten when the parser changes. It is read again through the
 new one, so `?value=42` gives the number `42` and then the string `'42'`. A value the new
-parser will not accept reads as that parser's default, or as `null` when it has none.
+parser will not accept reads as that parser's default, or as the missing value when it has
+none.
 
 ## The one that stays
 

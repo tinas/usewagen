@@ -10,7 +10,8 @@ const page = useRouteState({ key: 'page', parser: parseAsInteger })
 
 `page` is a `Ref<number | null>`. The parser reads `?page=2` as `2`, writes `2` back as
 `'2'`, and reads `?page=later` as `null`, because a string it cannot use is treated the same
-way as a param that was never there.
+way as a param that was never there. That `null` is the [missing value](#the-missing-value), and
+it is yours to replace.
 
 ## Choosing one
 
@@ -86,10 +87,33 @@ const size = useRouteState({
 })
 ```
 
+## The missing value
+
+A state without a default reads `null` when its value is missing or refused, and `null` is
+what you write to remove the value. That `null` is the missing value, and it is not fixed. The
+[configuration](/guide/configuration#the-missing-value) replaces it for the whole app, and a
+state replaces it for itself with `missing`.
+
+```ts
+const page = useRouteState({ key: 'page', parser: parseAsInteger, missing: undefined })
+```
+
+`page` is a `Ref<number | undefined>`, the shape most parameters already have, and
+assigning `undefined` removes the param. Any value will do, a sentinel of your own included,
+and a parser with a default never reads it, since the default answers first. Writing `null`
+or `undefined` removes the value whatever the missing value is, so a value that may be absent
+can be assigned as it is.
+
+The option is read by presence. `missing: undefined` means `undefined`, and a key left out
+means the instance decides, so an options object built by spreading should not carry the key
+unless it means to.
+
 ## Writing your own
 
 `defineParser` takes a `parse` and, when `String` is not the right way back, a `serialize`.
-Returning `null` from `parse` is how a parser says the string is not a value it accepts.
+Returning `null` from `parse` is how a parser says the string is not a value it accepts. That
+`null` belongs to the parser and stays `null` whatever the missing value of the app is; the
+state is what turns the answer into the default or the missing value.
 
 ```ts
 import { defineParser } from 'usewagen'

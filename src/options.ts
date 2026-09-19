@@ -1,9 +1,8 @@
-import type { MaybeRefOrGetter } from 'vue'
-import type { MaybeRefsOrGetters } from './types'
+import type { ReactiveOptions } from './types'
 
 import { toValue } from 'vue'
 
-export function toValueDeep<T extends object>(input: MaybeRefOrGetter<MaybeRefsOrGetters<T>>): T {
+export function toValueDeep<T extends object>(input: ReactiveOptions<T>): T {
   const source = toValue(input)
   const result = {} as T
 
@@ -12,4 +11,8 @@ export function toValueDeep<T extends object>(input: MaybeRefOrGetter<MaybeRefsO
   }
 
   return result
+}
+
+export function resolveMissing(options: { missing?: unknown }, fallback: unknown): unknown {
+  return 'missing' in options ? options.missing : fallback
 }

@@ -37,6 +37,46 @@ Parsers used by name are registered here as well. See
 
 [Instance](/api/wagen) lists every option with its default.
 
+## The missing value
+
+A state without a default reads `null` where its source holds nothing it can use, and
+writing `null` removes the value. An app that would rather work with `undefined`, so that a
+value that may be absent can be passed on as it is, replaces that
+[missing value](/guide/parsers#the-missing-value) in two places.
+
+The type is declared once, in a declaration file the project already compiles. The file has
+to be a module, which is what the `export {}` is for; without it the block declares a module
+of its own in place of the package instead of adding to it. The Vite plugin regenerates the
+`usewagen.d.ts` it writes, so the block goes in a file of your own.
+
+```ts [env.d.ts]
+export {}
+
+declare module 'usewagen' {
+  interface Register {
+    missing: undefined
+  }
+}
+```
+
+The value goes to the instance.
+
+```ts [main.ts]
+const wagen = createWagen({ missing: undefined })
+```
+
+From then on every ref without a default is a `Ref<T | undefined>`, reads `undefined` where it
+read `null`, and is cleared by writing `undefined` or, as before, `null`. A state that wants
+something else says so with `missing` in its own options, which wins over the instance.
+
+The two halves belong together, and `createWagen` holds them together as far as TypeScript
+allows. Once `Register` names a type the option is required, so an instance created without
+the value is a type error, and a value of another type is one as well. What is not caught is
+`undefined` given while `Register` is still empty, which passes through an optional option
+unless `exactOptionalPropertyTypes` is on, and the instance the composables create on their
+own when none is installed, which reads `null`. Since the instance is where the value lives,
+an app that changes the type installs one.
+
 ## Reading the instance
 
 `useWagen` hands a component the active instance, which carries the registered parsers, the

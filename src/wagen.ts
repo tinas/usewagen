@@ -1,11 +1,12 @@
 import type { App, InjectionKey } from 'vue'
-import type { StateMode } from './types'
+import type { Missing, Register, StateMode } from './types'
 import type { Parser } from './parser/parsers'
 import type { HistoryMode, RouteStateSource } from './router/types'
 import type { ErrorHandler, StorageInstance } from './storage/create-storage'
 
 import { hasInjectionContext, inject, markRaw } from 'vue'
 import { ErrorCodes, warnDev } from './messages'
+import { resolveMissing } from './options'
 import { createLocalStorage, createSessionStorage } from './storage/presets'
 
 export interface WagenStorageOptions {
@@ -27,11 +28,13 @@ export interface WagenRouterOptions {
 
 export type WagenParsers = Record<string, Parser<any>>
 
-export interface WagenConfig {
+type MissingConfig = 'missing' extends keyof Register ? { missing: Missing } : { missing?: Missing }
+
+export type WagenConfig = {
   parsers?: WagenParsers
   storage?: WagenStorageOptions
   router?: WagenRouterOptions
-}
+} & MissingConfig
 
 export interface WagenStorage {
   readonly local: StorageInstance
@@ -44,6 +47,7 @@ export type ResolvedWagenRouterOptions = Required<WagenRouterOptions>
 
 export interface Wagen {
   readonly parsers: WagenParsers
+  readonly missing: Missing
   readonly storage: WagenStorage
   readonly router: ResolvedWagenRouterOptions
   install: (app: App) => void
@@ -105,6 +109,7 @@ export function createWagen(config: WagenConfig = {}): Wagen {
 
   const wagen: Wagen = markRaw({
     parsers: { ...config.parsers },
+    missing: resolveMissing(config, null) as Missing,
     storage,
     router: { ...ROUTER_DEFAULTS, ...config.router },
     install(app) {

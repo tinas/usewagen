@@ -57,7 +57,9 @@ q.value = null // the param is gone
 An empty string is a value, so it stays in the URL. `null` is what removes a param, which
 also means an input cleared with `v-model` leaves `?q=` behind. Write that `null` from
 script code rather than from a template, because Vue's template types keep the type a ref
-reads and not the wider one it accepts.
+reads and not the wider one it accepts. The `null` is the
+[missing value](/guide/parsers#the-missing-value), and the app or the state can make it
+`undefined` instead.
 
 Writing the default takes the param out instead of writing it, since a missing param already
 reads as the default, so a shared link carries what the user changed and nothing else.

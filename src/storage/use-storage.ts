@@ -1,38 +1,55 @@
 import type { ComputedRef, Ref } from 'vue'
-import type { ReactiveOptions } from '../types'
-import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
-import type { Wagen } from '../wagen'
+import type { Missing, ReactiveOptions } from '../types'
+import type {
+  InferInputValue,
+  InferInputWritable,
+  ParserInput,
+  UnwrapOption,
+  WithParser,
+} from '../parser/types'
+import type { WagenStorage } from '../wagen'
 import type { StorageState, StorageStateOptions } from './define-storage-state'
 
 import { computed, customRef, getCurrentScope, onWatcherCleanup, toValue, watch } from 'vue'
 import { ErrorCodes, warnDev } from '../messages'
-import { toValueDeep } from '../options'
+import { resolveMissing, toValueDeep } from '../options'
 import { defineStorageState } from './define-storage-state'
 import { getActiveWagen } from '../wagen'
 
-export type UseStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<WithParser<StorageStateOptions, P>>
+export type UseStorageOptions<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = ReactiveOptions<WithParser<StorageStateOptions, P, M>, 'missing'>
 
-export type UseLocalStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<WithParser<Omit<StorageStateOptions, 'storage'>, P>>
+export type UseLocalStorageOptions<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = ReactiveOptions<WithParser<Omit<StorageStateOptions, 'storage'>, P, M>, 'missing'>
 
-export type UseSessionStorageOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  UseLocalStorageOptions<P>
+export type UseSessionStorageOptions<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = UseLocalStorageOptions<P, M>
 
 function isStorageState(input: unknown): input is StorageState<any, any> {
   return typeof input === 'object' && input !== null && typeof (input as any).get === 'function'
 }
 
-function withWagenDefaults(options: StorageStateOptions, wagen: Wagen): StorageStateOptions {
+function withDefaults(
+  options: StorageStateOptions,
+  defaults: WagenStorage,
+  missing: unknown,
+): StorageStateOptions {
   const source = options.storage
   const storage =
-    source === undefined
-      ? wagen.storage.default
-      : typeof source === 'string'
-        ? wagen.storage[source]
-        : source
+    source === undefined ? defaults.default : typeof source === 'string' ? defaults[source] : source
 
-  return { ...options, storage, mode: options.mode ?? wagen.storage.mode }
+  return {
+    ...options,
+    storage,
+    mode: options.mode ?? defaults.mode,
+    missing: resolveMissing(options, missing),
+  }
 }
 
 function useStorageState(
@@ -40,16 +57,18 @@ function useStorageState(
 ): ComputedRef<StorageState<any, any>> {
   if (isStorageState(input)) return computed(() => input)
 
-  const wagen = getActiveWagen()
+  const { storage, missing } = getActiveWagen()
   return computed(() =>
-    defineStorageState(withWagenDefaults(toValueDeep<StorageStateOptions>(input), wagen)),
+    defineStorageState(withDefaults(toValueDeep<StorageStateOptions>(input), storage, missing)),
   )
 }
 
+type NotStorageState = { get?: never }
+
+export function useStorage<P extends ParserInput | undefined = undefined, const M = Missing>(
+  options: UseStorageOptions<P, M> & NotStorageState,
+): Ref<InferInputValue<P, UnwrapOption<M>>, InferInputWritable<P, UnwrapOption<M>>>
 export function useStorage<T, W>(state: StorageState<T, W>): Ref<T, W>
-export function useStorage<P extends ParserInput | undefined = undefined>(
-  options: UseStorageOptions<P>,
-): Ref<InferInputValue<P>, InferInputWritable<P>>
 
 export function useStorage(input: StorageState<any, any> | UseStorageOptions): Ref<any, any> {
   if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useStorage')
@@ -80,17 +99,17 @@ export function useStorage(input: StorageState<any, any> | UseStorageOptions): R
   return value
 }
 
-export function useLocalStorage<P extends ParserInput | undefined = undefined>(
-  options: UseLocalStorageOptions<P>,
-): Ref<InferInputValue<P>, InferInputWritable<P>>
+export function useLocalStorage<P extends ParserInput | undefined = undefined, const M = Missing>(
+  options: UseLocalStorageOptions<P, M>,
+): Ref<InferInputValue<P, UnwrapOption<M>>, InferInputWritable<P, UnwrapOption<M>>>
 
 export function useLocalStorage(options: UseLocalStorageOptions) {
   return useStorage(() => ({ ...toValue(options), storage: 'local' as const }))
 }
 
-export function useSessionStorage<P extends ParserInput | undefined = undefined>(
-  options: UseSessionStorageOptions<P>,
-): Ref<InferInputValue<P>, InferInputWritable<P>>
+export function useSessionStorage<P extends ParserInput | undefined = undefined, const M = Missing>(
+  options: UseSessionStorageOptions<P, M>,
+): Ref<InferInputValue<P, UnwrapOption<M>>, InferInputWritable<P, UnwrapOption<M>>>
 
 export function useSessionStorage(options: UseSessionStorageOptions) {
   return useStorage(() => ({ ...toValue(options), storage: 'session' as const }))

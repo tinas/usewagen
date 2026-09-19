@@ -1,6 +1,12 @@
 import type { Ref } from 'vue'
-import type { ReactiveFields, ReactiveOptions, StateMode } from '../types'
-import type { InferInputValue, InferInputWritable, ParserInput, WithParser } from '../parser/types'
+import type { Missing, ReactiveFields, ReactiveOptions, StateMode } from '../types'
+import type {
+  InferInputValue,
+  InferInputWritable,
+  ParserInput,
+  UnwrapOption,
+  WithParser,
+} from '../parser/types'
 import type { ResolvedParser } from '../parser/resolve'
 import type { ResolvedWagenRouterOptions } from '../wagen'
 import type { HistoryMode } from './types'
@@ -8,7 +14,7 @@ import type { HistoryMode } from './types'
 import { computed, customRef, getCurrentScope } from 'vue'
 import { ErrorCodes, warnDev } from '../messages'
 import { useRoute, useRouter } from 'vue-router'
-import { toValueDeep } from '../options'
+import { resolveMissing, toValueDeep } from '../options'
 import { resolveParser } from '../parser/resolve'
 import { parseValue, serializeValue } from '../parser/utils'
 import { getActiveWagen } from '../wagen'
@@ -16,18 +22,22 @@ import { enqueue } from './queue'
 
 export interface RouteHashOptions {
   parser?: ParserInput
+  missing?: unknown
   history?: HistoryMode
   clearOnDefault?: boolean
   mode?: StateMode
 }
 
-export type UseRouteHashOptions<P extends ParserInput | undefined = ParserInput | undefined> =
-  ReactiveOptions<WithParser<RouteHashOptions, P>>
+export type UseRouteHashOptions<
+  P extends ParserInput | undefined = ParserInput | undefined,
+  M = unknown,
+> = ReactiveOptions<WithParser<RouteHashOptions, P, M>, 'missing'>
 
-export type RouteHashConfig = ReactiveFields<RouteHashOptions>
+export type RouteHashConfig = ReactiveFields<RouteHashOptions, 'missing'>
 
 interface ResolvedRouteHashOptions {
   parser: ResolvedParser<any>
+  missing: unknown
   history: HistoryMode
   clearOnDefault: boolean
   mode: StateMode
@@ -36,28 +46,30 @@ interface ResolvedRouteHashOptions {
 function toResolvedHashOptions(
   options: RouteHashOptions,
   defaults: ResolvedWagenRouterOptions,
+  missing: unknown,
 ): ResolvedRouteHashOptions {
   return {
     parser: resolveParser(options.parser),
+    missing: resolveMissing(options, missing),
     history: options.history ?? defaults.history,
     clearOnDefault: options.clearOnDefault ?? defaults.clearOnDefault,
     mode: options.mode ?? defaults.mode,
   }
 }
 
-export function useRouteHash<P extends ParserInput | undefined = undefined>(
-  options?: UseRouteHashOptions<P>,
-): Ref<InferInputValue<P>, InferInputWritable<P>>
+export function useRouteHash<P extends ParserInput | undefined = undefined, const M = Missing>(
+  options?: UseRouteHashOptions<P, M>,
+): Ref<InferInputValue<P, UnwrapOption<M>>, InferInputWritable<P, UnwrapOption<M>>>
 
 export function useRouteHash(options: UseRouteHashOptions = {}) {
   if (!getCurrentScope()) warnDev(ErrorCodes.NO_EFFECT_SCOPE, 'useRouteHash')
 
   const route = useRoute()
   const router = useRouter()
-  const defaults = getActiveWagen().router
+  const { router: defaults, missing } = getActiveWagen()
 
   const resolvedOptions = computed<ResolvedRouteHashOptions>(() =>
-    toResolvedHashOptions(toValueDeep<RouteHashOptions>(options), defaults),
+    toResolvedHashOptions(toValueDeep<RouteHashOptions>(options), defaults, missing),
   )
 
   let cache: { seen: string | null; raw: string | null } | null = null
@@ -74,22 +86,23 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
     return {
       get: () => {
         track()
-        const { parser, mode } = resolvedOptions.value
+        const resolved = resolvedOptions.value
         const current = currentHash()
 
-        if (mode === 'source') {
+        if (resolved.mode === 'source') {
           cache = null
-          return parseValue(parser, current)
+          return parseValue(resolved, current)
         }
 
-        if (cache && cache.seen === current) return parseValue(parser, cache.raw)
+        if (cache && cache.seen === current) return parseValue(resolved, cache.raw)
 
         cache = { seen: current, raw: current }
-        return parseValue(parser, current)
+        return parseValue(resolved, current)
       },
       set: next => {
-        const { parser, clearOnDefault, history, mode } = resolvedOptions.value
-        const serialized = serializeValue(parser, clearOnDefault, next)
+        const resolved = resolvedOptions.value
+        const { history, mode } = resolved
+        const serialized = serializeValue(resolved, next)
         const optimistic = mode === 'optimistic'
         const own = ++generation
 

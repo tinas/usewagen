@@ -115,6 +115,16 @@ describe('routeStateOptions typing', () => {
     expectTypeOf(state.value).toEqualTypeOf<string | null>()
   })
 
+  test('a definition carries its missing value through every composable', () => {
+    const options = routeStateOptions({ key: 'page', parser: parseAsInteger, missing: undefined })
+    const page = run(() => useRouteState(options))
+    const states = run(() => useRouteStates([options]))
+
+    expectTypeOf(page.value).toEqualTypeOf<number | undefined>()
+    expectTypeOf(states.page.value).toEqualTypeOf<number | undefined>()
+    expect(page.value).toBeUndefined()
+  })
+
   test('rejects a misspelled option and a mistyped patch', () => {
     function reject() {
       // @ts-expect-error unknown option

@@ -35,8 +35,10 @@ It also decides the type of the ref. `parseAsInteger` gives a `Ref<number | null
 longer be missing.
 
 A value that is not there, and a string the parser refuses, are treated the same way: you
-get the default, or `null` when the parser has none. A hand edited URL never reaches your
-component as an error.
+get the default, or the missing value when the parser has none. The missing value is `null`
+unless the [configuration](/guide/configuration#the-missing-value) or the state names another,
+and it is the same value that removes the entry when written. A hand edited URL never reaches
+your component as an error.
 
 ## The ref is what your component sees
 
@@ -53,9 +55,10 @@ up in the other as soon as the write lands.
 
 ## Writing
 
-A write runs the value through `serialize` and hands the string to the source. Writing
-`null` removes the value rather than storing the word `null`, and an empty string is a value
-of its own, so `?q=` stays in the URL and `''` stays in the storage.
+A write runs the value through `serialize` and hands the string to the source. Writing the
+missing value removes the entry rather than storing a word like `null`, and so does writing
+`null` or `undefined`, whatever the missing value is. An empty string is a value of its own,
+so `?q=` stays in the URL and `''` stays in the storage.
 
 Where the two sources differ is when the write lands, and what can keep it from landing.
 

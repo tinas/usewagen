@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import type { Missing } from '../types'
 import type { DefaultValue, Parser, ParserWithDefault } from './parsers'
 
 export type BuiltinParsers = {
@@ -25,28 +26,32 @@ type NamedParserRef = {
 
 export type ParserInput = (Parser<any> & { name?: never }) | NamedParserRef
 
-export type UnwrapParser<P> = P extends Ref<infer U> ? U : P extends () => infer U ? U : P
+export type UnwrapOption<T> = T extends Ref<infer U> ? U : T extends () => infer U ? U : T
 
-export type WithParser<T, P extends ParserInput | undefined> = Omit<T, 'parser'> & {
+export type WithParser<T, P extends ParserInput | undefined, M = unknown> = Omit<
+  T,
+  'parser' | 'missing'
+> & {
   parser?: P
+  missing?: M
 }
 
-export type InferInputValue<P> = ResolveInputValue<UnwrapParser<P>>
+export type InferInputValue<P, M = Missing> = ResolveInputValue<UnwrapOption<P>, M>
 
-type ResolveInputValue<P> = [P] extends [undefined]
-  ? string | null
+type ResolveInputValue<P, M> = [P] extends [undefined]
+  ? string | M
   : P extends ParserWithDefault<infer T>
     ? T
     : P extends Parser<infer T>
-      ? T | null
+      ? T | M
       : P extends { name: infer K; defaultValue: any }
         ? K extends keyof KnownParsers
           ? InferParserValue<KnownParsers[K]>
           : string
         : P extends { name: infer K }
           ? K extends keyof KnownParsers
-            ? InferParserValue<KnownParsers[K]> | null
-            : string | null
-          : string | null
+            ? InferParserValue<KnownParsers[K]> | M
+            : string | M
+          : string | M
 
-export type InferInputWritable<P> = InferInputValue<P> | null | undefined
+export type InferInputWritable<P, M = Missing> = InferInputValue<P, M> | M | null | undefined

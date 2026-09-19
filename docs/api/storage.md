@@ -24,7 +24,8 @@ const draft = useStorage({ key: 'draft', parser: parseAsJson<Draft>() })
 ```
 
 The options object, and every option in it, accepts a value, a `ref`, a `computed` or a
-getter. See [Reactive Options](/guide/reactive-options).
+getter, except `parser`, which takes everything but a getter. See
+[Reactive Options](/guide/reactive-options#a-parser-that-follows-the-app).
 
 ### Options
 
@@ -33,11 +34,14 @@ getter. See [Reactive Options](/guide/reactive-options).
 | `key`            | `string`                                  | required        | The entry to read and write, written without the configured prefix.      |
 | `storage`        | `'local' \| 'session' \| StorageInstance` | `'local'`       | Where the value lives. Follows the instance unless given.                |
 | `parser`         | `Parser \| { name }`                      | `parseAsString` | Turns the stored string into a value and decides the type of the ref.    |
+| `missing`        | `unknown`                                 | the instance's  | What the ref reads without a value or a default, and what removes it.    |
 | `clearOnDefault` | `boolean`                                 | `true`          | Remove the entry instead of writing a value equal to the parser default. |
 | `mode`           | `'optimistic' \| 'source'`                | `'optimistic'`  | Whether a write the browser refused still reads back.                    |
 
 The defaults for `storage` and `mode`, and the prefix in front of `key`, come from
-[createWagen](/api/wagen#storage).
+[createWagen](/api/wagen#storage), and the default for `missing` from
+[its own option](/api/wagen#missing). `missing` is read by presence: a key set to `undefined`
+means `undefined`, a key left out means the instance decides.
 
 #### mode
 
@@ -75,9 +79,9 @@ function useSessionStorage<P extends ParserInput | undefined = undefined>(
 ## defineStorageState
 
 ```ts
-function defineStorageState<P extends ParserInput | undefined = undefined>(
-  options: WithParser<StorageStateOptions, P>,
-): StorageState<InferInputValue<P>, InferInputWritable<P>>
+function defineStorageState<P extends ParserInput | undefined = undefined, M = Missing>(
+  options: WithParser<StorageStateOptions, P, M>,
+): StorageState<InferInputValue<P, M>, InferInputWritable<P, M>>
 ```
 
 The same state without a ref, for code that runs outside a component. It takes the options
@@ -95,11 +99,11 @@ const theme = useStorage(themeState)
 
 ### StorageState
 
-| Member      | Type                                    | Description                                                       |
-| ----------- | --------------------------------------- | ----------------------------------------------------------------- |
-| `key`       | `string`                                | The key without the prefix.                                       |
-| `storage`   | `StorageInstance`                       | The instance it reads from.                                       |
-| `get`       | `() => T`                               | Reads the value through the parser.                               |
-| `set`       | `(value: W) => void`                    | Writes it back. `set(null)` removes the entry.                    |
-| `remove`    | `() => void`                            | Removes the entry regardless of the parser and `clearOnDefault`.  |
-| `subscribe` | `(listener: () => void) => Unsubscribe` | Runs the listener on every change, and returns the stop function. |
+| Member      | Type                                    | Description                                                                 |
+| ----------- | --------------------------------------- | --------------------------------------------------------------------------- |
+| `key`       | `string`                                | The key without the prefix.                                                 |
+| `storage`   | `StorageInstance`                       | The instance it reads from.                                                 |
+| `get`       | `() => T`                               | Reads the value through the parser.                                         |
+| `set`       | `(value: W) => void`                    | Writes it back. `null`, `undefined` and the missing value remove the entry. |
+| `remove`    | `() => void`                            | Removes the entry regardless of the parser and `clearOnDefault`.            |
+| `subscribe` | `(listener: () => void) => Unsubscribe` | Runs the listener on every change, and returns the stop function.           |

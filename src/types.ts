@@ -1,16 +1,23 @@
-import type { MaybeRefOrGetter } from 'vue'
+import type { ComputedRef, MaybeRef, MaybeRefOrGetter } from 'vue'
 
 export type StateMode = 'optimistic' | 'source'
 
-export type MaybeRefsOrGetters<T> = {
-  [K in keyof T]: MaybeRefOrGetter<T[K]>
+export interface Register {}
+
+type Registered<K extends string, TFallback> = K extends keyof Register ? Register[K] : TFallback
+
+export type Missing = Registered<'missing', null>
+
+export type MaybeRefOrComputed<T> = MaybeRef<T> | ComputedRef<T>
+
+export type ReactiveFields<T, TRaw extends keyof T = never> = {
+  [K in keyof T]: K extends TRaw
+    ? T[K]
+    : K extends 'parser'
+      ? MaybeRefOrComputed<T[K]>
+      : MaybeRefOrGetter<T[K]>
 }
 
-export type ReactiveFields<T, TStatic extends keyof T = never> = MaybeRefsOrGetters<
-  Omit<T, TStatic>
-> &
-  Pick<T, TStatic>
-
-export type ReactiveOptions<T, TStatic extends keyof T = never> = MaybeRefOrGetter<
-  ReactiveFields<T, TStatic>
+export type ReactiveOptions<T, TRaw extends keyof T = never> = MaybeRefOrGetter<
+  ReactiveFields<T, TRaw>
 >

@@ -597,7 +597,7 @@ describe('useStorage reactive options', () => {
       const state = useStorage({
         key: 'value',
         storage,
-        parser: () => (numeric.value ? parseAsInteger : parseAsString),
+        parser: computed(() => (numeric.value ? parseAsInteger : parseAsString)),
       })
 
       expect(state.value).toBe(42)
@@ -616,7 +616,7 @@ describe('useStorage reactive options', () => {
       const state = useStorage({
         key: 'value',
         storage,
-        parser: () => (numeric.value ? parseAsInteger.withDefault(0) : parseAsString),
+        parser: computed(() => (numeric.value ? parseAsInteger.withDefault(0) : parseAsString)),
       })
 
       expect(state.value).toBe('abc')
@@ -681,6 +681,109 @@ describe('useStorage reactive options', () => {
   })
 })
 
+describe('useStorage missing value', () => {
+  test('a missing entry reads as the missing value', () => {
+    const count = useStorage({ key: 'count', storage, parser: parseAsInteger, missing: undefined })
+
+    expectTypeOf(count.value).toEqualTypeOf<number | undefined>()
+    expect(count.value).toBeUndefined()
+  })
+
+  test('writing the missing value removes the entry', () => {
+    const count = useStorage({ key: 'count', storage, parser: parseAsInteger, missing: undefined })
+
+    count.value = 5
+    count.value = undefined
+
+    expect(storage.has('count')).toBe(false)
+    expect(count.value).toBeUndefined()
+  })
+
+  test('null and undefined remove the entry whatever the missing value is', () => {
+    const count = useStorage({ key: 'count', storage, parser: parseAsInteger, missing: 'none' })
+
+    count.value = 5
+    count.value = null
+    expect(storage.has('count')).toBe(false)
+    expect(count.value).toBe('none')
+
+    count.value = 5
+    count.value = undefined
+    expect(storage.has('count')).toBe(false)
+    expect(count.value).toBe('none')
+  })
+
+  test('null removes an entry that has both a default and a missing value of its own', () => {
+    const theme = useStorage({
+      key: 'theme',
+      storage,
+      parser: { name: 'parseAsString', defaultValue: 'light' },
+      missing: 'none',
+    })
+
+    theme.value = 'dark'
+    expect(storage.getItem('theme')).toBe('dark')
+
+    theme.value = null
+    expect(storage.has('theme')).toBe(false)
+    expect(theme.value).toBe('light')
+  })
+
+  test('the configured missing value applies when a call does not name one', () => {
+    const { run } = installWagen({ missing: undefined })
+
+    run(() => {
+      const theme = useLocalStorage({ key: 'theme' })
+
+      expect(theme.value).toBeUndefined()
+    })
+  })
+
+  test('a call overrides the configured missing value', () => {
+    const { run } = installWagen({ missing: undefined })
+
+    run(() => {
+      const theme = useLocalStorage({ key: 'theme', missing: null })
+
+      expectTypeOf(theme.value).toEqualTypeOf<string | null>()
+      expect(theme.value).toBeNull()
+    })
+  })
+
+  test('a getter missing value is re-read like any other option', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const strict = ref(false)
+      const count = useStorage({
+        key: 'count',
+        storage,
+        parser: parseAsInteger,
+        missing: () => (strict.value ? undefined : null),
+      })
+
+      expectTypeOf(count.value).toEqualTypeOf<number | null | undefined>()
+      expect(count.value).toBeNull()
+
+      strict.value = true
+      expect(count.value).toBeUndefined()
+    })
+    scope.stop()
+  })
+
+  test('a state keeps its own missing value when handed to useStorage', () => {
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: undefined,
+    })
+    const state = useStorage(count)
+
+    expectTypeOf(state.value).toEqualTypeOf<number | undefined>()
+    expect(state.value).toBeUndefined()
+  })
+})
+
 describe('useStorage type inference', () => {
   test('falls back to the default parser when none is given', () => {
     const theme = useStorage({ key: 'theme', storage })
@@ -693,6 +796,32 @@ describe('useStorage type inference', () => {
     const count = useStorage({ key: 'count', storage, parser: parseAsInteger.withDefault(0) })
 
     expectTypeOf(count.value).toEqualTypeOf<number>()
+  })
+
+  test('the parser takes a ref or a computed, not a getter', () => {
+    const numeric = ref(true)
+    const parser = computed(() => (numeric.value ? parseAsInteger : parseAsString))
+    const value = useStorage({ key: 'value', storage, parser })
+
+    expectTypeOf(value.value).toEqualTypeOf<number | string | null>()
+
+    function reject() {
+      // @ts-expect-error a getter would hide the parser names from the editor
+      useStorage({ key: 'value', storage, parser: () => parseAsInteger })
+    }
+
+    expect(typeof reject).toBe('function')
+  })
+
+  test('a state object never matches the options overload', () => {
+    const count = defineStorageState({
+      key: 'count',
+      storage,
+      parser: parseAsInteger,
+      missing: 'none',
+    })
+
+    expectTypeOf(useStorage(count).value).toEqualTypeOf<number | 'none'>()
   })
 
   test('a state carries its own type through', () => {

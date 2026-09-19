@@ -9,23 +9,24 @@ export function normalizeRaw(raw: RawValue): string | null {
   return value ?? null
 }
 
-export function parseValue<T>(parser: ResolvedParser<T>, raw: RawValue): T | null {
+export function parseValue<T, M>(
+  options: { parser: ResolvedParser<T>; missing: M },
+  raw: RawValue,
+): T | M {
+  const { parser, missing } = options
   const value = normalizeRaw(raw)
-  if (value === null) {
-    return parser.defaultValue !== undefined ? unwrapDefault(parser.defaultValue) : null
-  }
-  const parsed = parser.parse(value)
+  const parsed = value === null ? null : parser.parse(value)
   if (parsed !== null) return parsed
-  return parser.defaultValue !== undefined ? unwrapDefault(parser.defaultValue) : null
+  return parser.defaultValue !== undefined ? unwrapDefault(parser.defaultValue) : missing
 }
 
-export function serializeValue<T>(
-  parser: ResolvedParser<T>,
-  clearOnDefault: boolean,
-  next: T | null | undefined,
+export function serializeValue<T, M>(
+  options: { parser: ResolvedParser<T>; clearOnDefault: boolean; missing: M },
+  next: T | M | null | undefined,
 ): string | null {
-  if (next == null) return null
-  const serialized = parser.serialize(next)
+  const { parser, clearOnDefault, missing } = options
+  if (next == null || Object.is(next, missing)) return null
+  const serialized = parser.serialize(next as T)
   if (clearOnDefault && parser.defaultValue !== undefined) {
     const defaultSerialized = parser.serialize(unwrapDefault(parser.defaultValue))
     if (serialized === defaultSerialized) return null

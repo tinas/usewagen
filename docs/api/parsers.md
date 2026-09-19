@@ -20,10 +20,11 @@ and determines the type of the ref a composable returns.
 | `parseAsJson`          | `T`                  | `filter={"a":1}`      |
 
 The first six are parsers. The last five are functions that return one. Each type in the
-table is the value type; without `withDefault` the ref is that type or `null`.
+table is the value type; without `withDefault` the ref is that type or the
+[missing value](/api/wagen#missing), which is `null` unless configured.
 
 A string a parser does not accept is treated as a missing value, so it reads as the default
-or as `null`. Nothing throws.
+or as the missing value. Nothing throws.
 
 ### parseAsDate
 
@@ -120,8 +121,9 @@ function defineParser<T>(options: {
 }): Parser<T>
 ```
 
-Creates a parser. `parse` returns `null` for a string it does not accept. `serialize`
-defaults to `String`.
+Creates a parser. `parse` returns `null` for a string it does not accept, and that `null`
+stays the parser's answer whatever the missing value of the app is. `serialize` defaults to
+`String`.
 
 ```ts
 import { defineParser } from 'usewagen'

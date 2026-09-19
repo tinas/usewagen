@@ -21,7 +21,8 @@ const page = useRouteState({ key: 'page', parser: parseAsInteger.withDefault(1) 
 ```
 
 The options object, and every option in it, accepts a value, a `ref`, a `computed` or a
-getter. See [Reactive Options](/guide/reactive-options).
+getter, except `parser`, which takes everything but a getter. See
+[Reactive Options](/guide/reactive-options#a-parser-that-follows-the-app).
 
 ### Options
 
@@ -29,6 +30,7 @@ getter. See [Reactive Options](/guide/reactive-options).
 | ---------------- | -------------------------- | ------------------ | ------------------------------------------------------------------------ |
 | `key`            | `string`                   | required           | Names the state, and the param unless `urlKey` is given.                 |
 | `parser`         | `Parser \| { name }`       | `parseAsString`    | Turns the param into a value and decides the type of the ref.            |
+| `missing`        | `unknown`                  | the instance's     | What the ref reads without a value or a default, and what removes it.    |
 | `urlKey`         | `string`                   | the value of `key` | The param name in the URL.                                               |
 | `source`         | `'query' \| 'params'`      | `'query'`          | The query string, or the dynamic segments of the matched route.          |
 | `history`        | `'push' \| 'replace'`      | `'replace'`        | How a write navigates.                                                   |
@@ -36,7 +38,9 @@ getter. See [Reactive Options](/guide/reactive-options).
 | `mode`           | `'optimistic' \| 'source'` | `'optimistic'`     | Whether a write reads back before the navigation lands.                  |
 
 The defaults for `source`, `history`, `clearOnDefault` and `mode` come from
-[createWagen](/api/wagen#router).
+[createWagen](/api/wagen#router), and the default for `missing` from
+[its own option](/api/wagen#missing). `missing` is read by presence: a key set to `undefined`
+means `undefined`, a key left out means the instance decides.
 
 #### history
 
@@ -77,7 +81,7 @@ and is the only option that is not reactive.
 | Member     | Type                                      | Description                                             |
 | ---------- | ----------------------------------------- | ------------------------------------------------------- |
 | `set`      | `(patch, options?: { history? }) => void` | Writes the keys in the patch, in one navigation.        |
-| `reset`    | `(options?: { history? }) => void`        | Writes every key back to its parser default.            |
+| `reset`    | `(options?: { history? }) => void`        | Writes every key back to its default, or removes it.    |
 | `toObject` | `() => Values`                            | The current values as a plain object, typed key by key. |
 
 ```ts
@@ -95,7 +99,7 @@ function useRouteHash<P extends ParserInput | undefined = undefined>(
 ```
 
 Keeps the fragment of the URL, with the leading `#` as part of the value. Takes `parser`,
-`history`, `clearOnDefault` and `mode`, with the same defaults.
+`missing`, `history`, `clearOnDefault` and `mode`, with the same defaults.
 
 ```ts
 import { useRouteHash } from 'usewagen/router'

@@ -59,7 +59,9 @@ theme.value = null // the entry is removed
 
 An empty string is a value like any other. `null` is what removes an entry, and so is
 writing a value equal to the parser default, since a missing entry reads as that default
-anyway. `clearOnDefault: false` keeps such a value in the storage instead.
+anyway. `clearOnDefault: false` keeps such a value in the storage instead. The `null` is the
+[missing value](/guide/parsers#the-missing-value), and the app or the state can make it
+`undefined` instead.
 
 A `null` write belongs in script code rather than in a template, because Vue's template
 types keep the type a ref reads and not the wider one it accepts.
