@@ -18,7 +18,7 @@ import { resolveMissing, toValueDeep } from '../options'
 import { resolveParser } from '../parser/resolve'
 import { parseValue, serializeValue } from '../parser/utils'
 import { getActiveWagen } from '../wagen'
-import { enqueue } from './queue'
+import { getRouteQueue } from './queue'
 
 export interface RouteHashOptions {
   parser?: ParserInput
@@ -66,6 +66,7 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
 
   const route = useRoute()
   const router = useRouter()
+  const queue = getRouteQueue(router)
   const { router: defaults, missing } = getActiveWagen()
 
   const resolvedOptions = computed<ResolvedRouteHashOptions>(() =>
@@ -111,7 +112,7 @@ export function useRouteHash(options: UseRouteHashOptions = {}) {
           trigger()
         }
 
-        void enqueue(router, { history, hash: serialized }).then(() => {
+        void queue.enqueue({ history, hash: serialized }).then(() => {
           if (!optimistic || generation !== own) return
           cache = null
           trigger()

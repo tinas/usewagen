@@ -69,7 +69,10 @@ Where the two sources differ is when the write lands, and what can keep it from 
 | Reported by | the ref, which returns to the value the URL holds                                 | `onError`, since the ref keeps what you assigned |
 
 Batching is what makes a page number and a filter that change together produce one URL
-rather than two, and it covers the hash and `useRouteStates.set` as well.
+rather than two, and it covers the hash and `useRouteStates.set` as well. A write made while
+an earlier navigation is still held in a guard is laid over what that navigation carries, so
+the value written a tick earlier travels on in the navigation that replaces it instead of
+being lost with the one that was cancelled.
 
 ## What you read in the meantime
 
